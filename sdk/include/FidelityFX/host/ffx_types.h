@@ -48,6 +48,7 @@
 // If your mutex type doesn't support shared locking mechanism you can rely
 // on exclusive locks only (define _SHARED variants to the same exclusive operation).
 #ifndef FFX_MUTEX
+#ifdef __cplusplus
 #if __cplusplus >= 201703L
 #include <shared_mutex>
 /// FidelityFX mutex wrapper.
@@ -63,6 +64,14 @@
 #define FFX_MUTEX std::mutex
 #define FFX_MUTEX_IMPL_STANDARD
 #endif // #if __cplusplus >= 201703L
+#else
+// C compilation: mutex not available, define as dummy type (not used in C API)
+#define FFX_MUTEX int
+#define FFX_MUTEX_LOCK(x)
+#define FFX_MUTEX_LOCK_SHARED(x)
+#define FFX_MUTEX_UNLOCK(x)
+#define FFX_MUTEX_UNLOCK_SHARED(x)
+#endif // #ifdef __cplusplus
 #endif // #ifndef FFX_MUTEX
 
 #if defined(FFX_GCC) || !defined(FFX_BUILD_AS_DLL)
