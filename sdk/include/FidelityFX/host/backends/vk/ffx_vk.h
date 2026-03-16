@@ -155,10 +155,17 @@ FFX_API FfxPipeline ffxGetPipelineVK(VkPipeline pipeline);
 /// An abstract FidelityFX resources.
 ///
 /// @ingroup VKBackend
+#ifdef __cplusplus
 FFX_API FfxResource ffxGetResourceVK(void*  vkResource,
     FfxResourceDescription                  ffxResDescription,
     const wchar_t*                          ffxResName,
     FfxResourceStates                       state = FFX_RESOURCE_STATE_COMPUTE_READ);
+#else
+FFX_API FfxResource ffxGetResourceVK(void*  vkResource,
+    FfxResourceDescription                  ffxResDescription,
+    const wchar_t*                          ffxResName,
+    FfxResourceStates                       state);
+#endif
 
 /// Fetch a <c><i>FfxSurfaceFormat</i></c> from a VkFormat.
 ///
@@ -180,9 +187,15 @@ FFX_API FfxSurfaceFormat ffxGetSurfaceFormatVK(VkFormat format);
 /// An <c><i>FfxResourceDescription</i></c>.
 ///
 /// @ingroup VKBackend
+#ifdef __cplusplus
 FFX_API FfxResourceDescription ffxGetBufferResourceDescriptionVK(const VkBuffer           buffer,
                                                                  const VkBufferCreateInfo createInfo,
                                                                  FfxResourceUsage         additionalUsages = FFX_RESOURCE_USAGE_READ_ONLY);
+#else
+FFX_API FfxResourceDescription ffxGetBufferResourceDescriptionVK(const VkBuffer           buffer,
+                                                                 const VkBufferCreateInfo createInfo,
+                                                                 FfxResourceUsage         additionalUsages);
+#endif
 
 /// Fetch a <c><i>FfxResourceDescription</i></c> from an existing VkImage.
 ///
@@ -194,9 +207,15 @@ FFX_API FfxResourceDescription ffxGetBufferResourceDescriptionVK(const VkBuffer 
 /// An <c><i>FfxResourceDescription</i></c>.
 ///
 /// @ingroup VKBackend
+#ifdef __cplusplus
 FFX_API FfxResourceDescription ffxGetImageResourceDescriptionVK(const VkImage           image,
                                                                 const VkImageCreateInfo createInfo,
                                                                 FfxResourceUsage        additionalUsages = FFX_RESOURCE_USAGE_READ_ONLY);
+#else
+FFX_API FfxResourceDescription ffxGetImageResourceDescriptionVK(const VkImage           image,
+                                                                const VkImageCreateInfo createInfo,
+                                                                FfxResourceUsage        additionalUsages);
+#endif
 
 /// Fetch a <c><i>FfxCommandQueue</i></c> from an existing VkQueue.
 ///
@@ -243,10 +262,12 @@ FFX_API VkSwapchainKHR ffxGetVKSwapchain(FfxSwapchain ffxSwapchain);
 /// FFX_ERROR_BACKEND_API_ERROR         Internal generic error. If the returned <c><i>gameSwapChain</i></c> is NULL, the old swapchain has been destroyed.
 ///
 /// @ingroup VKFrameInterpolation
+#ifdef __cplusplus
 FFX_API FfxErrorCode ffxReplaceSwapchainForFrameinterpolationVK(FfxCommandQueue                    gameQueue,
                                                                 FfxSwapchain&                      gameSwapChain,
                                                                 const VkSwapchainCreateInfoKHR*    swapchainCreateInfo,
                                                                 const VkFrameInterpolationInfoFFX* frameInterpolationInfo);
+#endif
 
 /// Waits for the <c><i>FfxSwapchain</i></c> to complete presentation.
 ///
@@ -285,7 +306,9 @@ FFX_API FfxErrorCode ffxRegisterFrameinterpolationUiResourceVK(FfxSwapchain game
 /// FFX_ERROR_INVALID_ARGUMENT          Could not query the interface for the frame interpolation swap chain.
 ///
 /// @ingroup VKFrameInterpolation
+#ifdef __cplusplus
 FFX_API FfxErrorCode ffxGetFrameinterpolationCommandlistVK(FfxSwapchain gameSwapChain, FfxCommandList& gameCommandlist);
+#endif
 
 /// Fetches a <c><i>FfxResource</i></c>  representing the backbuffer from the <c><i>FfxSwapchain</i></c>.
 ///
@@ -353,7 +376,7 @@ typedef uint64_t (*PFN_getLastPresentCountFFX)(VkSwapchainKHR);
 /// Regarding specific functions:
 ///   - queuePresentKHR: when using this one, the presenting image should be in VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL state
 ///   - getLastPresentCount: this function isn't part of Vulkan but the engine can use it to get the real number of presented frames since the swapchain creation
-struct FfxSwapchainReplacementFunctions
+typedef struct FfxSwapchainReplacementFunctions
 {
     PFN_vkCreateSwapchainFFX    createSwapchainFFX;
     PFN_vkDestroySwapchainKHR   destroySwapchainKHR;
@@ -362,7 +385,7 @@ struct FfxSwapchainReplacementFunctions
     PFN_vkQueuePresentKHR       queuePresentKHR;
     PFN_vkSetHdrMetadataEXT     setHdrMetadataEXT;
     PFN_getLastPresentCountFFX  getLastPresentCountFFX;
-};
+} FfxSwapchainReplacementFunctions;
 FFX_API FfxErrorCode ffxGetSwapchainReplacementFunctionsVK(FfxDevice device, FfxSwapchainReplacementFunctions* functions);
 
 #if defined(__cplusplus)

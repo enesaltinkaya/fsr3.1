@@ -23,6 +23,9 @@
 #pragma once
 
 #include <stdint.h>
+#ifndef __cplusplus
+#include <stdbool.h>
+#endif
 
 ///
 /// @defgroup ffxSDK SDK
@@ -163,8 +166,10 @@
 /// @ingroup Defines
 #define UPLOAD_JOB_COUNT               (16)
 
-// Off by default warnings
+// Off by default warnings (MSVC only)
+#ifdef _MSC_VER
 #pragma warning(disable : 4365 4710 4820 5039)
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -498,7 +503,7 @@ typedef enum FfxDescriptorType {
     FFX_DESCRIPTOR_BUFFER_SRV,
     FFX_DESCRIPTOR_TEXTURE_UAV,
     FFX_DESCRIPTOR_BUFFER_UAV,
-} FfxDescriptiorType;
+} FfxDescriptorType, FfxDescriptiorType;
 
 /// An enumeration for view binding stages
 ///
@@ -786,7 +791,7 @@ typedef struct FfxConstantAllocation
     FfxResource     resource;        ///< The resource representing the constant buffer resource.
     FfxUInt64       handle;          ///< The binding handle for the constant buffer
 
-} FfxRootConstantAllocation;
+} FfxConstantAllocation, FfxRootConstantAllocation;
 
 /// A function definition for a constant buffer allocation callback
 ///
@@ -842,6 +847,7 @@ typedef struct FfxResourceInitData
         unsigned char value;   ///< Indicates that the resource will be filled up with this value.
     };
 
+#ifdef __cplusplus
     static FfxResourceInitData FfxResourceInitValue(size_t dataSize, uint8_t initVal)
     {
         FfxResourceInitData initData = { FFX_RESOURCE_INIT_DATA_TYPE_VALUE };
@@ -857,6 +863,7 @@ typedef struct FfxResourceInitData
         initData.buffer = pInitData;
         return initData;
     }
+#endif
 
 } FfxResourceInitData;
 
@@ -898,7 +905,7 @@ typedef struct FfxViewDescription
     wchar_t                     name[FFX_RESOURCE_NAME_SIZE];
 } FfxViewDescription;
 
-static FfxViewDescription s_FfxViewDescInit = { false, FFX_RESOURCE_VIEW_DIMENSION_TEXTURE_2D, -1, -1, -1, L"" };
+static FfxViewDescription s_FfxViewDescInit = { false, FFX_RESOURCE_VIEW_DIMENSION_TEXTURE_2D, {-1}, {-1}, -1, L"" };
 
 /// A structure defining a resource bind point
 ///

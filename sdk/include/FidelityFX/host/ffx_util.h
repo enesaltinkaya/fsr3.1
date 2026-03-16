@@ -172,6 +172,7 @@ const float FFX_EPSILON = 1e-06f;
 /// @return Number of bits set to 1 in provided val.
 ///
 /// @ingroup Utils
+#ifdef __cplusplus
 inline uint8_t ffxCountBitsSet(uint32_t val) noexcept
 {
 #if __cplusplus >= 202002L
@@ -188,3 +189,13 @@ inline uint8_t ffxCountBitsSet(uint32_t val) noexcept
     return static_cast<uint8_t>(((c >> 16) + c) & 0x0000FFFF);
 #endif
 }
+#else
+static inline uint8_t ffxCountBitsSet(uint32_t val)
+{
+    uint32_t c = val - ((val >> 1) & 0x55555555);
+    c = ((c >> 2) & 0x33333333) + (c & 0x33333333);
+    c = ((c >> 4) + c) & 0x0F0F0F0F;
+    c = ((c >> 8) + c) & 0x00FF00FF;
+    return (uint8_t)(((c >> 16) + c) & 0x0000FFFF);
+}
+#endif
