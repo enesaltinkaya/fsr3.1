@@ -415,8 +415,12 @@ static FfxErrorCode createPipelineStates(FfxFsr3UpscalerContext_Private* context
     const uint32_t waveLaneCountMax = capabilities.waveLaneCountMax;
     if (waveLaneCountMin == 32 && waveLaneCountMax == 64)
     {
-        useLut         = true;
         canForceWave64 = haveShaderModel66;
+        /* useLut = true (LANCZOS luma pyramid) caused blurry output on AMD GPUs.
+         * The wave64-only path uses a different luma interpolation that degrades
+         * temporal accumulation quality. Force the wave32-compatible path on all
+         * hardware for consistent sharpness. */
+        useLut         = false;
     }
     else
     {
