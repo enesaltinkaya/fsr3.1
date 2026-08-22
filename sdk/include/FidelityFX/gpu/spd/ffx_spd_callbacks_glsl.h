@@ -77,11 +77,11 @@ layout (set = 0, binding = 1000) uniform sampler s_LinearClamp;
 #endif
 
 #if defined FFX_SPD_BIND_UAV_INPUT_DOWNSAMPLE_SRC_MID_MIPMAP
-    layout (set = 0, binding = FFX_SPD_BIND_UAV_INPUT_DOWNSAMPLE_SRC_MID_MIPMAP, rgba32f)  coherent uniform image2DArray  rw_input_downsample_src_mid_mip;
+    layout (set = 0, binding = FFX_SPD_BIND_UAV_INPUT_DOWNSAMPLE_SRC_MID_MIPMAP, rgba16f)  coherent uniform image2DArray  rw_input_downsample_src_mid_mip;
 #endif
 
 #if defined FFX_SPD_BIND_UAV_INPUT_DOWNSAMPLE_SRC_MIPS
-    layout (set = 0, binding = FFX_SPD_BIND_UAV_INPUT_DOWNSAMPLE_SRC_MIPS, rgba32f)                 uniform image2DArray  rw_input_downsample_src_mips[SPD_MAX_MIP_LEVELS+1];
+    layout (set = 0, binding = FFX_SPD_BIND_UAV_INPUT_DOWNSAMPLE_SRC_MIPS, rgba16f)                 uniform image2DArray  rw_input_downsample_src_mips[SPD_MAX_MIP_LEVELS+1];
 #endif
 
 #if FFX_HALF

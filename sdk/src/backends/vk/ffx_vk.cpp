@@ -1530,7 +1530,11 @@ FfxErrorCode CreateBackendContextVK(FfxInterface* backendInterface, FfxEffect ef
         descriptorPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         descriptorPoolCreateInfo.pNext = nullptr;
         descriptorPoolCreateInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-        descriptorPoolCreateInfo.poolSizeCount = 5;
+        /* Fork patch: upstream passes poolSizeCount = 5, which drops the
+         * STORAGE_BUFFER entry at the end of poolSizes — any effect binding
+         * a storage buffer (e.g. SPD's atomic counter) then allocates from
+         * an unsized type (validation warning, OOM on strict drivers). */
+        descriptorPoolCreateInfo.poolSizeCount = 6;
         descriptorPoolCreateInfo.pPoolSizes = poolSizes;
         descriptorPoolCreateInfo.maxSets = backendContext->maxEffectContexts * FFX_MAX_PASS_COUNT * MAX_PIPELINE_USAGE_PER_FRAME * FFX_MAX_QUEUED_FRAMES;
 

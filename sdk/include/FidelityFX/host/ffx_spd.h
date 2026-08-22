@@ -57,7 +57,15 @@
 /// The size of the context specified in 32bit values.
 ///
 /// @ingroup FfxSpd
+/// Fork patch: 9300 uint32s on Windows, but on Linux the private context
+/// is larger (wchar_t is 4 bytes, inflating FfxPipelineState's name[64]);
+/// sizeof(FfxSpdContext_Private) = 70200 B there. The SDK's static assert
+/// in ffxSpdContextCreate catches regressions at compile time.
+#if defined(_WIN32)
 #define FFX_SPD_CONTEXT_SIZE       (9300)
+#else
+#define FFX_SPD_CONTEXT_SIZE       (18000)
+#endif
 
 /// If this ever changes, need to also reflect a change in number
 /// of resources in ffx_spd_resources.h
