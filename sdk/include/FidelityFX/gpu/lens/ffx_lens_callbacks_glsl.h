@@ -110,7 +110,7 @@ layout(set = 0, binding = LENS_BIND_SRV_INPUT_TEXTURE) uniform texture2D r_input
 
 // UAVs
 #if defined LENS_BIND_UAV_OUTPUT_TEXTURE
-layout(set = 0, binding = LENS_BIND_UAV_OUTPUT_TEXTURE, rgba32f) uniform image2D rw_output_texture;
+layout(set = 0, binding = LENS_BIND_UAV_OUTPUT_TEXTURE, rgba8) uniform image2D rw_output_texture;  // fork: rgba32f -> rgba8 (display-domain LDR output, see docs/fsr3.1.md)
 #endif
 
 #if FFX_HALF

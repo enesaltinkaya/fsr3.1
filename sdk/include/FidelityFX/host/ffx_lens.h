@@ -57,7 +57,15 @@
 /// The size of the context specified in 32bit values.
 ///
 /// @ingroup FfxLens
+/// Fork patch: upstream 9200 uint32s, but on Linux sizeof(FfxLensContext_Private)
+/// is 70064 B (wchar_t inflation of the pipeline-state name buffers) —
+/// 17516 uint32s. 18000 with margin; the SDK's FFX_STATIC_ASSERT in
+/// ffxLensContextCreate catches regressions at compile time.
+#if defined(_WIN32)
 #define FFX_LENS_CONTEXT_SIZE (9200)
+#else
+#define FFX_LENS_CONTEXT_SIZE (18000)
+#endif
 
 #if defined(__cplusplus)
 extern "C" {
