@@ -128,7 +128,14 @@ uniform sampler PointSampler;
     uniform image2D rw_internal_far;
 #endif
 #if defined(FFX_DOF_BIND_UAV_OUTPUT_COLOR)
-    layout (set = 0, binding = FFX_DOF_BIND_UAV_OUTPUT_COLOR, rgba32f)
+    // rgba16f (upstream: rgba32f): the engine's HDR render targets are
+    // R16G16B16A16_SFLOAT and the storage-image format qualifier is baked
+    // into the precompiled SPIR-V, so only R16G16B16A16_SFLOAT images can
+    // be used as the DOF output (format-incompatible views are illegal).
+    // The engine always uses a separate output image (no
+    // FFX_DOF_OUTPUT_PRE_INIT), so the COMBINE_IN_PLACE imageLoad path is
+    // unaffected in practice.
+    layout (set = 0, binding = FFX_DOF_BIND_UAV_OUTPUT_COLOR, rgba16f)
     uniform image2D rw_output_color;
 #endif
 #if defined(FFX_DOF_BIND_UAV_INTERNAL_GLOBALS)

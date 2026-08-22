@@ -57,8 +57,15 @@
 
 /// The size of the context specified in 32bit values.
 ///
-/// @ingroup ffxDof
+/// On non-Windows (Linux) wchar_t is 4 bytes, so FfxDofContext_Private
+/// (5 FfxPipelineState members, each with a wchar_t name[64] plus binding
+/// name arrays) is 349096 bytes = 87274 uint32s. The SDK's static assert
+/// in ffxDofContextCreate catches regressions at compile time.
+#if defined(_WIN32)
 #define FFX_DOF_CONTEXT_SIZE  (45674)
+#else
+#define FFX_DOF_CONTEXT_SIZE  (88000)
+#endif
 
 #if defined(__cplusplus)
 extern "C" {
