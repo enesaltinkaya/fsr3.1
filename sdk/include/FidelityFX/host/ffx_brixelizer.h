@@ -27,12 +27,31 @@
 /// The size of the context specified in 32bit values.
 ///
 /// @ingroup ffxBrixelizer
+// Fork patch: 5938838 uint32s on Windows, but on Linux the private
+// context is larger (wchar_t is 4 bytes, inflating the embedded raw
+// context, baked update description, and FfxPipelineState name arrays);
+// sizeof(FfxBrixelizerContext_Private) = 24787544 B = 6196886 u32s. The
+// SDK's static assert in ffx_brixelizer.cpp catches regressions at
+// compile time.
+#if defined(_WIN32)
 #define FFX_BRIXELIZER_CONTEXT_SIZE            (5938838)
+#else
+#define FFX_BRIXELIZER_CONTEXT_SIZE            (6196886)
+#endif
 
 /// The size of the update description specified in 32bit values.
 ///
 /// @ingroup ffxBrixelizer
+// Fork patch: the baked update description is 8397504 B (2099376 u32s) on
+// Windows, but on Linux wchar_t is 4 bytes (2 on Windows), inflating the
+// embedded per-instance name arrays in FfxBrixelizerBakedUpdateDescription
+// _Private to 8403904 B = 2100976 u32s. The SDK's static assert in
+// ffx_brixelizer.cpp catches regressions at compile time.
+#if defined(_WIN32)
 #define FFX_BRIXELIZER_UPDATE_DESCRIPTION_SIZE 2099376
+#else
+#define FFX_BRIXELIZER_UPDATE_DESCRIPTION_SIZE 2100976
+#endif
 
 #ifdef __cplusplus
 extern "C" {

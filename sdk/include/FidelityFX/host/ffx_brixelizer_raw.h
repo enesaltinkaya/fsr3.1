@@ -57,7 +57,16 @@
 /// The size of the raw context specified in 32bit values.
 ///
 /// @ingroup ffxBrixelizer
+/// Fork patch: 2924058 uint32s on Windows, but on Linux the private
+/// context is larger (wchar_t is 4 bytes, inflating the FfxPipelineState
+/// name arrays); sizeof(FfxBrixelizerRawContext_Private) = 12728424 B =
+/// 3182106 u32s. The SDK's static assert in ffx_brixelizer_raw.cpp catches
+/// regressions at compile time.
+#if defined(_WIN32)
 #define FFX_BRIXELIZER_RAW_CONTEXT_SIZE (2924058)
+#else
+#define FFX_BRIXELIZER_RAW_CONTEXT_SIZE (3182106)
+#endif
 
 #ifdef __cplusplus
 extern "C" {

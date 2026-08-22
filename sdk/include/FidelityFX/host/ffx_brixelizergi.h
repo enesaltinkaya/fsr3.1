@@ -50,7 +50,16 @@
 /// The size of the context specified in 32bit values.
 ///
 /// @ingroup ffxBrixgi
+/// Fork patch: 210000 uint32s on Windows, but on Linux the private
+/// context is larger (wchar_t is 4 bytes, inflating the FfxPipelineState
+/// name arrays); sizeof(FfxBrixelizerGIContext_Private) = 1398720 B =
+/// 349680 u32s. The SDK's static assert in ffx_brixelizergi.cpp catches
+/// regressions at compile time.
+#if defined(_WIN32)
 #define FFX_BRIXELIZER_GI_CONTEXT_SIZE (210000)
+#else
+#define FFX_BRIXELIZER_GI_CONTEXT_SIZE (349680)
+#endif
 
 /// FidelityFX Brixelizer GI context count
 /// 
