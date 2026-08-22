@@ -450,28 +450,28 @@ layout (set=0, binding = 1004) uniform sampler g_RealPointClampSampler;
     layout (set=0, binding = CACAO_BIND_UAV_LOAD_COUNTER, r32ui) uniform uimage1D g_RwLoadCounter;
 #endif
 #if defined CACAO_BIND_UAV_DEINTERLEAVED_DEPTHS
-    layout (set=0, binding = CACAO_BIND_UAV_DEINTERLEAVED_DEPTHS, r32f) uniform image2DArray g_RwDeinterleavedDepth;
+    layout (set=0, binding = CACAO_BIND_UAV_DEINTERLEAVED_DEPTHS, r16f) uniform image2DArray g_RwDeinterleavedDepth;
 #endif
 #if defined CACAO_BIND_UAV_DEINTERLEAVED_NORMALS
-    layout (set=0, binding = CACAO_BIND_UAV_DEINTERLEAVED_NORMALS, rgba32f) uniform image2DArray g_RwDeinterleavedNormals;
+    layout (set=0, binding = CACAO_BIND_UAV_DEINTERLEAVED_NORMALS, rgba8_snorm) uniform image2DArray g_RwDeinterleavedNormals;
 #endif
 #if defined CACAO_BIND_UAV_SSAO_BUFFER_PING
-    layout (set=0, binding = CACAO_BIND_UAV_SSAO_BUFFER_PING, rg32f) uniform image2DArray g_RwSsaoBufferPing;
+    layout (set=0, binding = CACAO_BIND_UAV_SSAO_BUFFER_PING, rg8) uniform image2DArray g_RwSsaoBufferPing;
 #endif
 #if defined CACAO_BIND_UAV_SSAO_BUFFER_PONG
-    layout (set=0, binding = CACAO_BIND_UAV_SSAO_BUFFER_PONG, rg32f) uniform image2DArray g_RwSsaoBufferPong;
+    layout (set=0, binding = CACAO_BIND_UAV_SSAO_BUFFER_PONG, rg8) uniform image2DArray g_RwSsaoBufferPong;
 #endif
 #if defined CACAO_BIND_UAV_IMPORTANCE_MAP
-    layout (set = 0, binding = CACAO_BIND_UAV_IMPORTANCE_MAP, r32f) uniform image2D g_RwImportanceMap;
+    layout (set = 0, binding = CACAO_BIND_UAV_IMPORTANCE_MAP, r8) uniform image2D g_RwImportanceMap;
 #endif
 #if defined CACAO_BIND_UAV_IMPORTANCE_MAP_PONG
-    layout (set = 0, binding = CACAO_BIND_UAV_IMPORTANCE_MAP_PONG, r32f) uniform image2D g_RwImportanceMapPong;
+    layout (set = 0, binding = CACAO_BIND_UAV_IMPORTANCE_MAP_PONG, r8) uniform image2D g_RwImportanceMapPong;
 #endif
 #if defined CACAO_BIND_UAV_OUTPUT
     layout (set = 0, binding = CACAO_BIND_UAV_OUTPUT, rgba16f) uniform image2D g_RwOutput;
 #endif
 #if defined CACAO_BIND_UAV_DEPTH_DOWNSAMPLED_MIPS
-    layout (set = 0, binding = CACAO_BIND_UAV_DEPTH_DOWNSAMPLED_MIPS, r32f) uniform image2DArray g_RwDepthMips[4];
+    layout (set = 0, binding = CACAO_BIND_UAV_DEPTH_DOWNSAMPLED_MIPS, r16f) uniform image2DArray g_RwDepthMips[4];
 #endif
 
 // =============================================================================
