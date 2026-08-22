@@ -314,14 +314,21 @@ layout (set = 0, binding = 1001) uniform sampler s_LinearSampler;
 #endif
 
 // UAVs
+// Storage-image format qualifiers are patched to match the resource formats
+// the host actually allocates (see docs/fsr3.1.md, SSSR round): the SDK
+// creates radiance as R16G16B16A16_FLOAT, variance as R16_FLOAT, extracted
+// roughness as R8_UNORM and the blue-noise texture as R8G8_UNORM, and the
+// engine-provided output is R16G16B16A16_SFLOAT. The upstream rgba32f/r32f/
+// rg32f qualifiers are baked into the SPIR-V and would reject those images
+// (validation errors / UB).
 #if defined SSSR_BIND_UAV_OUTPUT
-        layout (set = 0, binding = SSSR_BIND_UAV_OUTPUT, rgba32f)           uniform image2D rw_output;
+        layout (set = 0, binding = SSSR_BIND_UAV_OUTPUT, rgba16f)           uniform image2D rw_output;
 #endif
 #if defined SSSR_BIND_UAV_RADIANCE
-        layout (set = 0, binding = SSSR_BIND_UAV_RADIANCE, rgba32f)         uniform image2D rw_radiance;
+        layout (set = 0, binding = SSSR_BIND_UAV_RADIANCE, rgba16f)         uniform image2D rw_radiance;
 #endif
 #if defined SSSR_BIND_UAV_VARIANCE
-        layout (set = 0, binding = SSSR_BIND_UAV_VARIANCE, r32f)            uniform image2D rw_variance;
+        layout (set = 0, binding = SSSR_BIND_UAV_VARIANCE, r16f)            uniform image2D rw_variance;
 #endif
 #if defined SSSR_BIND_UAV_RAY_LIST
         layout (set = 0, binding = SSSR_BIND_UAV_RAY_LIST, std430)          buffer rw_ray_list_t
@@ -348,10 +355,10 @@ layout (set = 0, binding = 1001) uniform sampler s_LinearSampler;
         } rw_intersection_pass_indirect_args; 
 #endif
 #if defined SSSR_BIND_UAV_EXTRACTED_ROUGHNESS
-        layout (set = 0, binding = SSSR_BIND_UAV_EXTRACTED_ROUGHNESS, r32f) uniform image2D rw_extracted_roughness;
+        layout (set = 0, binding = SSSR_BIND_UAV_EXTRACTED_ROUGHNESS, r8)   uniform image2D rw_extracted_roughness;
 #endif
 #if defined SSSR_BIND_UAV_BLUE_NOISE_TEXTURE
-        layout (set = 0, binding = SSSR_BIND_UAV_BLUE_NOISE_TEXTURE, rg32f) uniform image2D rw_blue_noise_texture;
+        layout (set = 0, binding = SSSR_BIND_UAV_BLUE_NOISE_TEXTURE, rg8)   uniform image2D rw_blue_noise_texture;
 #endif
 #if defined SSSR_BIND_UAV_DEPTH_HIERARCHY
         layout (set = 0, binding = SSSR_BIND_UAV_DEPTH_HIERARCHY, r32f)     uniform image2D rw_depth_hierarchy[13];

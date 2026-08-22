@@ -55,8 +55,16 @@
 
 /// The size of the context specified in 32bit values.
 ///
-/// @ingroup FfxSssr
+/// On non-Windows (Linux) wchar_t is 4 bytes, so FfxSssrContext_Private
+/// (5 SSSR FfxPipelineState members + the embedded FfxDenoiserContext, which
+/// itself carries 8 FfxPipelineState members) is 909664 bytes = 227416
+/// uint32s (with FFX_DENOISER_CONTEXT_SIZE bumped to 140000). The SDK's
+/// static assert in ffxSssrContextCreate catches regressions at compile time.
+#if defined(_WIN32)
 #define FFX_SSSR_CONTEXT_SIZE (118914)
+#else
+#define FFX_SSSR_CONTEXT_SIZE (228000)
+#endif
 
 #if defined(__cplusplus)
 extern "C" {

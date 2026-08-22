@@ -54,8 +54,15 @@
 
 /// The size of the context specified in 32bit values.
 ///
-/// @ingroup Denoiser
+/// On non-Windows (Linux) wchar_t is 4 bytes, so FfxDenoiserContext_Private
+/// (8 FfxPipelineState members, each with a wchar_t name[64] plus binding
+/// name arrays) is 558608 bytes = 139652 uint32s. The SDK's static assert
+/// in ffxDenoiserContextCreate catches regressions at compile time.
+#if defined(_WIN32)
 #define FFX_DENOISER_CONTEXT_SIZE (73098)
+#else
+#define FFX_DENOISER_CONTEXT_SIZE (140000)
+#endif
 
 #if defined(__cplusplus)
 extern "C" {
