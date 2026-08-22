@@ -184,7 +184,14 @@
 /// The size of the context specified in 32bit values.
 ///
 /// @ingroup FfxCacao
+// On Linux, wchar_t is 4 bytes (vs 2 on Windows), making the private
+// context (33 FfxPipelineState members, each with wchar_t name[64])
+// ~1.1MB larger than the Windows-sized budget (2302456 vs 1204216 bytes).
+#if defined(_WIN32)
 #define FFX_CACAO_CONTEXT_SIZE (301054)
+#else
+#define FFX_CACAO_CONTEXT_SIZE (600000)
+#endif
 
 /// FidelityFX CACAO context count.
 ///
