@@ -74,5 +74,10 @@ typedef struct FfxBrixelizerGIContext_Private
     uint32_t                           frameIndex;
     FfxDimensions2D                    internalSize;
 	FfxGpuJobDescription               gpuJobDescription;
-    FfxConstantBuffer                  constantBuffers[3];
+    /* Fork patch: FOUR constant-buffer identifiers exist
+     * (FFX_BRIXELIZER_GI_CONSTANTBUFFER_IDENTIFIER_* 0..3) but upstream
+     * sized this array [3] — updateConstantBuffer(CONTEXT_INFO) wrote one
+     * FfxConstantBuffer past the struct end, corrupting whatever follows
+     * the host's FfxBrixelizerGIContext allocation. */
+    FfxConstantBuffer                  constantBuffers[4];
 } FfxBrixelizerGIContext_Private;

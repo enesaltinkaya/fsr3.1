@@ -58,7 +58,10 @@
 #if defined(_WIN32)
 #define FFX_BRIXELIZER_GI_CONTEXT_SIZE (210000)
 #else
-#define FFX_BRIXELIZER_GI_CONTEXT_SIZE (349680)
+/* Fork patch: +1 FfxConstantBuffer (16 bytes) over upstream's Linux value
+ * 349680 — the private struct's constantBuffers array was one entry short
+ * (see ffx_brixelizergi_private.h). */
+#define FFX_BRIXELIZER_GI_CONTEXT_SIZE (349684)
 #endif
 
 /// FidelityFX Brixelizer GI context count
