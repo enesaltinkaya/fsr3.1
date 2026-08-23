@@ -23,6 +23,9 @@
 #pragma once
 
 #include <FidelityFX/host/ffx_types.h>
+// fork patch (Brixelizer win build): std::popcount lives in <bit>; without
+// it the header only compiled where <bit> was pulled in transitively.
+#include <bit>
 
 /// @defgroup Utils Utilities
 /// Utility Macros used by the FidelityFX SDK
