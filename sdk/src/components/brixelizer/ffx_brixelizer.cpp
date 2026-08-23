@@ -26,6 +26,8 @@
 #include <string.h> // memset
 #include <math.h> // floorf
 #include <stdbool.h>
+#include <stdio.h>  // fprintf (FFX_BRIX_LOG diagnostic)
+#include <stdlib.h> // getenv/atoi (FFX_BRIX_LOG diagnostic)
 
 #define ifor(n) for (uint32_t i = 0; i < n; ++i)
 #define jfor(n) for (uint32_t j = 0; j < n; ++j)
@@ -77,6 +79,17 @@ typedef struct FfxBrixelizerInvalidation {
 typedef struct FfxBrixelizerInstance {
     FfxBrixelizerInstanceID id;
     FfxBrixelizerAABB       aabb;
+    /* Fork patch (engine 6.2): the documented-but-unimplemented per-instance
+     * maxCascade filter. Without it every instance whose AABB merely
+     * overlaps a cascade grid becomes a bake job in EVERY cascade — with
+     * the job-AABB inflation of one voxel (+128 m at the coarse cascades)
+     * the job areas of tens of thousands of small props merge into
+     * world-covering slabs, the reference count explodes past
+     * maxReferences (measured 132M vs a 32M budget) and every overflowed
+     * voxel is MarkFailed'd — permanently suppressing brick allocation
+     * AND the UNINITIALIZED->INVALID heal (the pipeline deadlocks in
+     * "restart next frame"). */
+    uint32_t                maxCascade;
 } FfxBrixelizerInstance;
 
 typedef struct FfxBrixelizerScratchSpace {
@@ -236,10 +249,11 @@ FfxErrorCode ffxBrixelizerBakeUpdate(FfxBrixelizerContext* uncastContext, const 
     if (cascadePrivate->flags & FFX_BRIXELIZER_CASCADE_STATIC) {
         FfxBrixelizerRawJobDescription *curJob = outDesc->staticJobs;
 
-        // Create instance jobs
+        // Create instance jobs (fork patch: maxCascade filter — see
+        // FfxBrixelizerInstance)
         ifor (context->numStaticInstances) {
             FfxBrixelizerInstance *instance = &context->instances[i];
-            if (aabbsOverlap(instance->aabb, casacadeAABB)) {
+            if (instance->maxCascade >= cascadeIndex && aabbsOverlap(instance->aabb, casacadeAABB)) {
                 FfxBrixelizerRawJobDescription job = {};
                 ifor (3) {
                     job.aabbMin[i] = instance->aabb.min[i];
@@ -283,15 +297,39 @@ FfxErrorCode ffxBrixelizerBakeUpdate(FfxBrixelizerContext* uncastContext, const 
     if (cascadePrivate->flags & FFX_BRIXELIZER_CASCADE_DYNAMIC) {
         FfxBrixelizerRawJobDescription *job = outDesc->dynamicJobs;
 
-        // Create instance jobs
-        outDesc->numDynamicJobs = FFX_ARRAY_ELEMENTS(context->instances) - context->dynamicInstanceStartIndex;
+        // Create instance jobs (fork patch: maxCascade filter)
+        outDesc->numDynamicJobs = 0;
         for (uint32_t i = context->dynamicInstanceStartIndex; i < FFX_ARRAY_ELEMENTS(context->instances); ++i) {
+            if (context->instances[i].maxCascade < cascadeIndex) {
+                continue;
+            }
             jfor (3) {
                 job->aabbMin[j] = context->instances[i].aabb.min[j];
                 job->aabbMax[j] = context->instances[i].aabb.max[j];
             }
             job->instanceIdx = context->instances[i].id;
             ++job;
+            outDesc->numDynamicJobs++;
+        }
+    }
+
+    /* FFX_BRIX_LOG=<n>: log every n-th bake's job/invalidation state to
+     * stderr (fork diagnostic — the engine's stats readback is lagged 3
+     * updates and cannot show CPU-side job state). */
+    {
+        static uint32_t logStride = 0;
+        static uint32_t logCounter = 0;
+        if (!logStride) {
+            const char* e = getenv("FFX_BRIX_LOG");
+            logStride = (e && *e) ? (uint32_t)atoi(e) : 0u;
+        }
+        if (logStride && (logCounter++ % logStride) == 0) {
+            fprintf(stderr,
+                    "[ffxBrixBake] frame=%u cascade=%u numStaticInstances=%u "
+                    "numInvalidations=%u numStaticJobs=%u numDynamicJobs=%u\n",
+                    desc->frameIndex, cascadeIndex, context->numStaticInstances,
+                    context->numInvalidations, outDesc->numStaticJobs,
+                    outDesc->numDynamicJobs);
         }
     }
 
@@ -560,12 +598,14 @@ FfxErrorCode ffxBrixelizerCreateInstances(FfxBrixelizerContext* uncastContext, c
 
             instance->id = instanceID;
             instance->aabb = desc->aabb;
+            instance->maxCascade = desc->maxCascade;
         } else {
             uint32_t instanceIndex = context->numStaticInstances++;
             FfxBrixelizerInstance *instance = &context->instances[instanceIndex];
 
             instance->id = instanceID;
             instance->aabb = desc->aabb;
+            instance->maxCascade = desc->maxCascade;
             context->instanceIndices[instanceID] = instanceIndex;
 
             addInvalidationJob(context, desc->aabb);

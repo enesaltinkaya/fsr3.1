@@ -1797,7 +1797,11 @@ FfxErrorCode CreateBackendContextVK(FfxInterface* backendInterface, FfxEffect ef
 
                 descriptorPoolCreateInfo.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
                 descriptorPoolCreateInfo.pNext         = nullptr;
-                descriptorPoolCreateInfo.flags         = 0;
+                // The effect-context teardown frees the bindless sets with
+                // vkFreeDescriptorSets, which requires the FREE bit (the main
+                // descriptor pool above already sets it; without it the
+                // destroy path trips a validation error on Vulkan).
+                descriptorPoolCreateInfo.flags         = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
                 descriptorPoolCreateInfo.poolSizeCount = poolSizeCount;
                 descriptorPoolCreateInfo.pPoolSizes    = poolSizes;
                 descriptorPoolCreateInfo.maxSets       = poolSizeCount;

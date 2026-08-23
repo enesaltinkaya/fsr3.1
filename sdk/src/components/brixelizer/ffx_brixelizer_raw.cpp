@@ -25,6 +25,8 @@
 #include <cmath>      // for fabs, abs, sinf, sqrt, etc.
 #include <string.h>   // for memset.
 #include <cfloat>     // for FLT_EPSILON.
+#include <stdio.h>    // fprintf (FFX_BRIX_LOG diagnostic)
+#include <stdlib.h>   // getenv/atoi (FFX_BRIX_LOG diagnostic)
 
 #define FFX_CPU
 #include <FidelityFX/gpu/ffx_core.h>
@@ -1494,6 +1496,44 @@ static FfxErrorCode brixelizerDispatchUpdateCascade(FfxBrixelizerRawContext_Priv
     }
 
     FFX_ASSERT(cascade->info.is_initialized);
+
+    /* Fork diagnostic (FFX_BRIX_LOG): which schedule branch runs per bake —
+     * voxelCount == 0 takes the InitializeCascade path (full-map
+     * UNINIT->INVALID heal), > 0 the full pipeline (ScanReferences heal). */
+    {
+        static uint32_t rawLogStride = 0;
+        static uint32_t rawLogCounter = 0;
+        if (!rawLogStride) {
+            const char* e = getenv("FFX_BRIX_LOG");
+            rawLogStride = (e && *e) ? (uint32_t)atoi(e) : 0u;
+        }
+        if (rawLogStride && (rawLogCounter++ % rawLogStride) == 0) {
+            /* Job composition: instance vs invalidate vs whole-grid-clamped
+             * (a clamped job's AABB spans the full 64^3 grid — its
+             * invalidation converts the whole map slice to UNINIT). */
+            uint32_t nInst = 0, nInv = 0, nClamped = 0;
+            uint64_t triSum = 0;
+            uint32_t badInst = 0;
+            for (uint32_t j = 0; j < numJobs; j++) {
+                if (context->jobs[j].flags & FFX_BRIXELIZER_JOB_FLAG_INVALIDATE) nInv++;
+                else nInst++;
+                uint32_t ii = context->jobs[j].instanceIdx;
+                if (ii < FFX_BRIXELIZER_MAX_INSTANCES && context->hostInstances[ii].triangleCount != 0)
+                    triSum += context->hostInstances[ii].triangleCount;
+                else
+                    badInst++;
+                if (context->jobs[j].aabbMin[0] == 0 && context->jobs[j].aabbMin[1] == 0 &&
+                    context->jobs[j].aabbMin[2] == 0 && context->jobs[j].aabbMax[0] >= 64 &&
+                    context->jobs[j].aabbMax[1] >= 64 && context->jobs[j].aabbMax[2] >= 64)
+                    nClamped++;
+            }
+            fprintf(stderr,
+                    "[ffxBrixRaw] cascade=%u numJobs=%u (inst=%u inv=%u clamped=%u) "
+                    "voxelCount=%u flags=%u triSum=%llu badInst=%u\n",
+                    cascade->info.index, numJobs, nInst, nInv, nClamped, voxelCount,
+                    (uint32_t)desc->flags, (unsigned long long)triSum, badInst);
+        }
+    }
 
     FfxBrixelizerBuildInfo buildInfo   = {};
     buildInfo.max_bricks_per_bake = desc->maxBricksPerBake;

@@ -925,6 +925,14 @@ void IncrementScratchCR1RefCounter(FfxUInt32 elementIdx, FfxUInt32 value, inout 
 }
 #endif
 
+#if defined BRIXELIZER_BIND_UAV_SCRATCH_CR1_REF_COUNTERS
+void DecrementScratchCR1RefCounter(FfxUInt32 elementIdx, FfxUInt32 value)
+{
+    int discardedValue;
+    InterlockedAdd(rw_scratch_cr1_ref_counters[elementIdx], -int(value), discardedValue);
+}
+#endif
+
 #if defined BRIXELIZER_BIND_UAV_SCRATCH_CR1_REF_COUNTER_SCAN
 FfxUInt32 LoadScratchCR1RefCounterScan(FfxUInt32 elementIdx)
 {

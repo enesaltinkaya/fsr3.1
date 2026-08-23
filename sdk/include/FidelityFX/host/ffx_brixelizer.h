@@ -33,10 +33,12 @@
 // sizeof(FfxBrixelizerContext_Private) = 24787544 B = 6196886 u32s. The
 // SDK's static assert in ffx_brixelizer.cpp catches regressions at
 // compile time.
+// Fork patch 2 (engine 6.2): +4 B (maxCascade) per entry of the
+// instances[FFX_BRIXELIZER_MAX_INSTANCES] table = +65536 u32s.
 #if defined(_WIN32)
-#define FFX_BRIXELIZER_CONTEXT_SIZE            (5938838)
+#define FFX_BRIXELIZER_CONTEXT_SIZE            (6004374)
 #else
-#define FFX_BRIXELIZER_CONTEXT_SIZE            (6196886)
+#define FFX_BRIXELIZER_CONTEXT_SIZE            (6262422)
 #endif
 
 /// The size of the update description specified in 32bit values.

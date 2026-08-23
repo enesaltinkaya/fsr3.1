@@ -80,6 +80,20 @@ FfxBoolean  CanBuildThisVoxel(FfxUInt32 flat_voxel_idx)
     return true;
 }
 
+#ifndef FFX_BRIXELIZER_MAX_REFS_PER_VOXEL
+/* Fork patch: dense-instance worlds (10k+ overlapping job AABBs) can demand
+ * 100M+ triangle references in a single bake — far beyond any feasible
+ * maxReferences budget (128M refs would need a 4 GB scratch buffer). Every
+ * overflow MarkFailed()s the voxel, and ScanReferences refuses to heal
+ * failed voxels, so the brick map wedges with permanent UNINITIALIZED holes.
+ * Capping references per voxel bounds the bake to
+ * 64^3 * FFX_BRIXELIZER_MAX_REFS_PER_VOXEL total refs (= the default
+ * maxReferences budget at 128) while keeping the SDF quality: a voxel's
+ * distance field is dominated by its nearest surfaces; a handful of refs
+ * suffices. */
+#define FFX_BRIXELIZER_MAX_REFS_PER_VOXEL 128
+#endif
+
 void AddReferenceOrMarkVoxelFailed(FfxUInt32 voxel_idx, FfxUInt32 triangle_id)
 {
     if (!CanBuildThisVoxel(voxel_idx)) {
@@ -88,6 +102,14 @@ void AddReferenceOrMarkVoxelFailed(FfxUInt32 voxel_idx, FfxUInt32 triangle_id)
 
     FfxUInt32 local_ref_idx;
     IncrementScratchCR1RefCounter(voxel_idx, FfxUInt32(1), local_ref_idx);
+#if defined(FFX_BRIXELIZER_MAX_REFS_PER_VOXEL) && defined(BRIXELIZER_BIND_UAV_SCRATCH_CR1_REF_COUNTERS)
+    if (local_ref_idx >= FFX_BRIXELIZER_MAX_REFS_PER_VOXEL) {
+        /* Roll the over-quota increment back so the counter equals the
+         * number of accepted (stored) references. */
+        DecrementScratchCR1RefCounter(voxel_idx, FfxUInt32(1));
+        return;
+    }
+#endif
     FfxBrixelizerTriangleReference ref;
     ref.voxel_idx     = voxel_idx;
     ref.triangle_id   = triangle_id;
@@ -911,11 +933,36 @@ void FfxBrixelizerVoxelize(FfxUInt32 gtid, FfxUInt32 group_id)
             FfxUInt32x3 local_voxel_coord  = FfxBrixelizerUnflatten(local_ref_id, dim);
             FfxUInt32x3 global_voxel_coord = local_voxel_coord + item.bounds_min;
             FfxUInt32  voxel_idx          = FfxBrixelizerFlattenPOT(global_voxel_coord, FFX_BRIXELIZER_CASCADE_DEGREE);
+            /* Fork patch: mirror the 2D path's distance cull. Without it,
+             * every cell of a triangle's voxel AABB takes a reference
+             * (and a triangle-swap entry), which explodes quadratically
+             * with dense instance piles: one bake demanded ~114M refs /
+             * ~2.7 GB of triangle swap, overflowing every budget and
+             * MarkFailed-ing ~15k voxels per bake (frozen heal). A voxel's
+             * SDF only needs triangles within 2 voxels — the 2D path has
+             * relied on exactly this cull upstream. */
+            FfxBoolean                   check_range = !FfxBrixelizerTriangleIsSmall(gs_ffx_brixelizer_voxelizer_items_triangle_id_swap_offsets[item_id]) && num_cells > FfxUInt32(1);
+            if (check_range) {
+                FfxBrixelizerTrianglePartial tri;
+                FfxBrixelizerLoadTrianglePartial(FfxBrixelizerTriangleIDGetOffset(gs_ffx_brixelizer_voxelizer_items_triangle_id_swap_offsets[item_id]), tri);
+                FfxFloat32x3 e0 = tri.wp1.xyz - tri.wp0.xyz;
+                FfxFloat32x3 e2 = tri.wp0.xyz - tri.wp2.xyz;
+                FfxFloat32x3 gn = normalize(cross(e2, e0));
+                FfxFloat32x3  voxel_offset = GetCascadeInfoVoxelSize() * (FfxFloat32x3(global_voxel_coord) + FFX_BROADCAST_FLOAT32X3(0.5));
+                FfxFloat32    dist         = abs(dot(gn, (voxel_offset - tri.wp0)));
+                if (dist <= GetCascadeInfoVoxelSize() * FfxFloat32(2.0)) {
+                    dist = CalculateDistanceToTriangle(voxel_offset, tri.wp0, tri.wp1, tri.wp2);
+                    if (dist <= GetCascadeInfoVoxelSize() * FfxFloat32(2.0)) {
+                        check_range = false; // within range: keep the reference
+                    }
+                }
+            }
             if (!gs_ffx_brixelizer_voxelizer_has_space) {
                 MarkFailed(voxel_idx);
-            } else {
+            } else if (!check_range) {
                 AddReferenceOrMarkVoxelFailed(voxel_idx, gs_ffx_brixelizer_voxelizer_items_triangle_id_swap_offsets[item_id]);
             }
+            // else: culled (farther than 2 voxels from the triangle) — drop
 #endif // !defined(FFX_BRIXELIZER_VOXELIZER_2D)
         }
     }
