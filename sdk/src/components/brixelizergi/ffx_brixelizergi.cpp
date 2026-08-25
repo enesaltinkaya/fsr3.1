@@ -1072,6 +1072,28 @@ static FfxErrorCode brixelizerGICreate(FfxBrixelizerGIContext_Private* pContext,
         for (int32_t currentSurfaceIndex = 0; currentSurfaceIndex < FFX_ARRAY_ELEMENTS(internalSurfaceDesc); ++currentSurfaceIndex)
         {
             const FfxInternalResourceDescription* currentSurfaceDescription = &internalSurfaceDesc[currentSurfaceIndex];
+
+            /* game-001 fork patch (Brixelizer GI round, phase 2): the Vulkan
+             * backend leaves FFX_RESOURCE_INIT_DATA_TYPE_UNINITIALIZED device
+             * memory as garbage (DX12 committed resources are zeroed, which
+             * is what the sample implicitly relies on).  The persistent brick
+             * SH accumulators are read by PROPAGATE_SH / EmitRadiance for any
+             * allocated brick before the per-frame CLEAR_CACHE necessarily
+             * covered it, so leftover garbage multiplies through the SH
+             * propagation (observed ~1000x values and a fully-zeroed diffuse
+             * output from the denoiser's luminance rejection).  Zero them at
+             * creation via the upload-copy init path the backend already
+             * implements for DEFAULT-heap buffers. */
+            FfxResourceInitData surfaceInitData = initData;
+            if (currentSurfaceDescription->id == FFX_BRIXELIZER_GI_RESOURCE_IDENTIFIER_BRICKS_SH ||
+                currentSurfaceDescription->id == FFX_BRIXELIZER_GI_RESOURCE_IDENTIFIER_BRICKS_DIRECT_SH ||
+                currentSurfaceDescription->id == FFX_BRIXELIZER_GI_RESOURCE_IDENTIFIER_BRICKS_SH_STATE)
+            {
+                surfaceInitData.type  = FFX_RESOURCE_INIT_DATA_TYPE_VALUE;
+                surfaceInitData.size  = currentSurfaceDescription->width;
+                surfaceInitData.value = 0;
+            }
+
             const FfxResourceDescription          resourceDescription       = {currentSurfaceDescription->type,
                                                                                currentSurfaceDescription->format,
                                                                                currentSurfaceDescription->width,
@@ -1083,7 +1105,7 @@ static FfxErrorCode brixelizerGICreate(FfxBrixelizerGIContext_Private* pContext,
 
             FfxResourceStates initialState = (currentSurfaceDescription->usage == FFX_RESOURCE_USAGE_READ_ONLY) ? FFX_RESOURCE_STATE_COMPUTE_READ : FFX_RESOURCE_STATE_UNORDERED_ACCESS;
 
-            const FfxCreateResourceDescription createResourceDescription = { FFX_HEAP_TYPE_DEFAULT, resourceDescription, initialState, currentSurfaceDescription->name, currentSurfaceDescription->id, initData};
+            const FfxCreateResourceDescription createResourceDescription = { FFX_HEAP_TYPE_DEFAULT, resourceDescription, initialState, currentSurfaceDescription->name, currentSurfaceDescription->id, surfaceInitData};
 
             memset(&pContext->resources[currentSurfaceDescription->id], 0, sizeof(FfxResourceInternal));
 
@@ -1535,6 +1557,15 @@ static FfxErrorCode brixelizerGIDispatch(FfxBrixelizerGIContext_Private*        
             FFX_BRIXELIZER_GI_RESOURCE_IDENTIFIER_STATIC_SCREEN_PROBES_0,
             FFX_BRIXELIZER_GI_RESOURCE_IDENTIFIER_STATIC_SCREEN_PROBES_1,
             FFX_BRIXELIZER_GI_RESOURCE_IDENTIFIER_RADIANCE_CACHE,
+            /* game-001 fork patch (phase 2): the persistent brick SH
+             * accumulators also start as garbage on Vulkan (see the
+             * creation-time zero-init patch above; this clear is the
+             * belt-and-braces on-first-dispatch variant — CLEAR_FLOAT on a
+             * buffer is vkCmdFillBuffer(0), which executeGpuJobClearFloat
+             * already supports). */
+            FFX_BRIXELIZER_GI_RESOURCE_IDENTIFIER_BRICKS_SH,
+            FFX_BRIXELIZER_GI_RESOURCE_IDENTIFIER_BRICKS_DIRECT_SH,
+            FFX_BRIXELIZER_GI_RESOURCE_IDENTIFIER_BRICKS_SH_STATE,
         };
 
         for (const uint32_t* resourceID = resourceIDs; resourceID < resourceIDs + FFX_ARRAY_ELEMENTS(resourceIDs); ++resourceID)
