@@ -64,7 +64,14 @@ void                   RegisterConstantBufferAllocatorVK(FfxInterface* backendIn
 
 static VkDeviceContext sVkDeviceContext = { VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE };
 
-#define MAX_PIPELINE_USAGE_PER_FRAME      (10) // Required to make sure passes that are called more than once per-frame don't have their descriptors overwritten.
+// The game-001-cpp Brixelizer integration builds the cascade AABB tree for all
+// 9 cascades per frame -> pipelineCascadeBuildTreeAABB is dispatched 9*3 = 27
+// times per frame.  With the stock value (10) the 4x10 = 40 descriptor-set ring
+// wrapped and re-updated sets still bound by pending command buffers
+// (VUID-vkUpdateDescriptorSets-None-03047).  4x32 = 128 covers 27 with headroom
+// for the GI pass.  (The descriptor pool capacity scales linearly with this
+// constant; it only reserves descriptor *capacity*, not memory per set.)
+#define MAX_PIPELINE_USAGE_PER_FRAME      (32)
 #define MAX_DESCRIPTOR_SET_LAYOUTS        (64)
 #define FFX_MAX_BINDLESS_DESCRIPTOR_COUNT (65536)
 

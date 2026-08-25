@@ -27,7 +27,9 @@
 
 // Cauldron render modules
 #include "gbuffer/gbufferrendermodule.h"
+#if !defined(CAULDRON_NO_GPU_PARTICLE)  // FFX fork patch (brixgi cross-build): module needs the parallelsort component
 #include "gpuparticle/gpuparticlerendermodule.h"
+#endif
 #include "lighting/lightingrendermodule.h"
 #include "rastershadow/rastershadowrendermodule.h"
 #include "skydome/skydomerendermodule.h"
@@ -44,7 +46,9 @@ namespace rendermodule
     {
         RenderModuleFactory::RegisterModule<SkyDomeRenderModule>("SkyDomeRenderModule");
         RenderModuleFactory::RegisterModule<GBufferRenderModule>("GBufferRenderModule");
+#if !defined(CAULDRON_NO_GPU_PARTICLE)
         RenderModuleFactory::RegisterModule<GPUParticleRenderModule>("GPUParticleRenderModule");
+#endif
         RenderModuleFactory::RegisterModule<LightingRenderModule>("LightingRenderModule");
         RenderModuleFactory::RegisterModule<RasterShadowRenderModule>("RasterShadowRenderModule");
         RenderModuleFactory::RegisterModule<TAARenderModule>("TAARenderModule");

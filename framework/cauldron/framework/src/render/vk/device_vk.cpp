@@ -37,6 +37,15 @@
 #include <vulkan/vulkan_win32.h>
 #include <map>
 
+// FFX fork patch (brixgi cross-build): the FidelityFX SDK static library
+// dispatches Vulkan through volk's function-pointer globals, while cauldron
+// itself links vulkan-1 directly. Hook the instance/device creation points so
+// the embedded FFX backend sees initialized entry points. volk.c is compiled
+// and linked by the sample build script.
+extern "C" VkResult volkInitialize(void);
+extern "C" void     volkLoadInstance(VkInstance instance);
+extern "C" void     volkLoadDevice(VkDevice device);
+
 // macro to get the procedure address of vulkan extensions
 #define GET_INSTANCE_PROC_ADDR(name) m_##name = (PFN_##name)vkGetInstanceProcAddr(m_Instance, #name)
 #define GET_DEVICE_PROC_ADDR(name) m_##name = (PFN_##name)vkGetDeviceProcAddr(m_Device, #name)
@@ -289,6 +298,8 @@ namespace cauldron
             VkResult   res      = vkCreateInstance(&inst_info, nullptr, &instance);
             CauldronAssert(ASSERT_CRITICAL, res == VK_SUCCESS, L"Unable to create instance");
 
+            volkLoadInstance(instance);  // FFX fork patch
+
             return instance;
         }
 
@@ -396,6 +407,8 @@ namespace cauldron
             VkDevice device;
             VkResult res = vkCreateDevice(m_physicalDevice, &device_info, nullptr, &device);
             CauldronAssert(ASSERT_CRITICAL, res == VK_SUCCESS, L"Unable to create device");
+
+            volkLoadDevice(device);  // FFX fork patch
 
             return device;
         }
@@ -657,6 +670,7 @@ namespace cauldron
         }
 
         // Create the instance
+        volkInitialize();  // FFX fork patch
         m_Instance = instanceCreator.Create(app_info);
 
         VkResult res = VK_SUCCESS;

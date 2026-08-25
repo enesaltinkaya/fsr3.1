@@ -319,9 +319,16 @@ FfxErrorCode ffxBrixelizerBakeUpdate(FfxBrixelizerContext* uncastContext, const 
     {
         static uint32_t logStride = 0;
         static uint32_t logCounter = 0;
+        static uint32_t logJobs = 0;
+        static uint32_t logJobsInit = 0;
         if (!logStride) {
             const char* e = getenv("FFX_BRIX_LOG");
             logStride = (e && *e) ? (uint32_t)atoi(e) : 0u;
+        }
+        if (!logJobsInit) {
+            logJobsInit = 1;
+            const char* e = getenv("FFX_BRIX_LOG_JOBS");
+            logJobs = (e && *e) ? 1u : 0u;
         }
         if (logStride && (logCounter++ % logStride) == 0) {
             fprintf(stderr,
@@ -330,6 +337,18 @@ FfxErrorCode ffxBrixelizerBakeUpdate(FfxBrixelizerContext* uncastContext, const 
                     desc->frameIndex, cascadeIndex, context->numStaticInstances,
                     context->numInvalidations, outDesc->numStaticJobs,
                     outDesc->numDynamicJobs);
+            /* FFX_BRIX_LOG_JOBS=1: per-job instance AABBs (engine diag —
+             * which instances actually reach the GPU bake). */
+            if (logJobs && cascadeIndex <= 1) {
+                for (uint32_t j = 0; j < outDesc->numStaticJobs; ++j) {
+                    const FfxBrixelizerRawJobDescription* job = &outDesc->staticJobs[j];
+                    fprintf(stderr,
+                            "[ffxBrixBake]   job%u inst=%u aabb=[%.1f,%.1f,%.1f..%.1f,%.1f,%.1f]%s\n",
+                            j, job->instanceIdx, job->aabbMin[0], job->aabbMin[1],
+                            job->aabbMin[2], job->aabbMax[0], job->aabbMax[1], job->aabbMax[2],
+                            (job->flags & FFX_BRIXELIZER_RAW_JOB_FLAG_INVALIDATE) ? " INVALIDATE" : "");
+                }
+            }
         }
     }
 
