@@ -58,8 +58,16 @@
 
 /// The size of the context specified in 32bit values.
 ///
-/// @ingroup ffxClassifier
+/// On non-Windows (Linux) wchar_t is 4 bytes, so FfxClassifierContext_Private
+/// (2 FfxPipelineState members, each with 5 FfxResourceBinding arrays of
+/// wchar_t name[64] plus a wchar_t name[64]) is 139992 bytes = 34998
+/// uint32s. The SDK's static assert in ffxClassifierContextCreate catches
+/// regressions at compile time.
+#if defined(_WIN32)
 #define FFX_CLASSIFIER_CONTEXT_SIZE  (18500)
+#else
+#define FFX_CLASSIFIER_CONTEXT_SIZE  (35000)
+#endif
 
 #if defined(__cplusplus)
 extern "C" {

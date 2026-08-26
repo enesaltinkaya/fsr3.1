@@ -135,15 +135,22 @@ FfxFloat32x2 MotionVectorScale()
     } rw_tile_metadata;
 #endif
 #if defined DENOISER_SHADOWS_BIND_UAV_REPROJECTION_RESULTS
-    layout (set = 0, binding = DENOISER_SHADOWS_BIND_UAV_REPROJECTION_RESULTS, rg32f)
+    // VK backend internal allocation: DenoiserShadows_Scratch0 is
+    // R16G16_FLOAT (VK_FORMAT_R16G16_SFLOAT); the stock rg32f qualifier
+    // would mismatch the SPIR-V image format against the bound image.
+    layout (set = 0, binding = DENOISER_SHADOWS_BIND_UAV_REPROJECTION_RESULTS, rg16f)
     uniform image2D rw_reprojection_results;
 #endif
 #if defined DENOISER_SHADOWS_BIND_UAV_CURRENT_MOMENTS
-    layout (set = 0, binding = DENOISER_SHADOWS_BIND_UAV_CURRENT_MOMENTS, rgba32f)
+    // VK backend internal allocation: DenoiserShadows_Moments0/1 are
+    // R11G11B10_FLOAT (VK_FORMAT_B10G11R11_UFLOAT_PACK32).
+    layout (set = 0, binding = DENOISER_SHADOWS_BIND_UAV_CURRENT_MOMENTS, r11f_g11f_b10f)
     uniform image2D rw_current_moments;
 #endif
 #if defined DENOISER_SHADOWS_BIND_UAV_HISTORY
-    layout (set = 0, binding = DENOISER_SHADOWS_BIND_UAV_HISTORY, rg32f)
+    // VK backend internal allocation: DenoiserShadows_Scratch1/0 are
+    // R16G16_FLOAT (VK_FORMAT_R16G16_SFLOAT).
+    layout (set = 0, binding = DENOISER_SHADOWS_BIND_UAV_HISTORY, rg16f)
     uniform image2D rw_history;
 #endif
 #if defined DENOISER_SHADOWS_BIND_UAV_FILTER_OUTPUT

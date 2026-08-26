@@ -57,7 +57,15 @@
 /// The size of the context specified in 32bit values.
 ///
 /// @ingroup FfxLpm
+/// Fork patch: upstream 9300 uint32s, but on Linux sizeof(FfxLpmContext_Private)
+/// is inflated by the wchar_t pipeline-state name buffers (same as the LENS
+/// bump) — 18000 with margin; the SDK's FFX_STATIC_ASSERT in
+/// ffxLpmContextCreate catches regressions at compile time.
+#if defined(_WIN32)
 #define FFX_LPM_CONTEXT_SIZE (9300)
+#else
+#define FFX_LPM_CONTEXT_SIZE (18000)
+#endif
 
 #if defined(__cplusplus)
 extern "C" {

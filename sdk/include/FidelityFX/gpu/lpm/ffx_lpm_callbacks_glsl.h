@@ -141,7 +141,10 @@ layout (set = 0, binding = 1000) uniform sampler s_LinearClamp;
 #define OutputFormat rgba16f
 #else
 #define ColorFormat FfxFloat32x4
-#define OutputFormat rgba32f
+/* Fork patch: upstream rgba32f, but the engine runs LPM on the
+ * display-referred (gamma-encoded) LDR image, 8-bit — same convention as
+ * the LENS output patch (see docs/fsr3.1.md in the game repo). */
+#define OutputFormat rgba8
 #endif
 
 // SRVs
