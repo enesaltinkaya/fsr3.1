@@ -34,6 +34,9 @@ using namespace std::experimental;
 
 #include <wrl.h>
 #include "dxc/inc/dxcapi.h"
+// [clang compat] __uuidof specializations for the IDxc* COM interfaces
+// (see build/brixgi-compat/dxc_uuids).
+#include "dxc_uuids"
 using namespace Microsoft::WRL;
 
 namespace

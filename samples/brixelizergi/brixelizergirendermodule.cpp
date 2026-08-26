@@ -22,8 +22,16 @@
 
 #include "brixelizergirendermodule.h"
 
+#include <cstdlib>
+#include <cstring>
 #include <functional>
 #include <float.h>
+
+#include <FidelityFX/host/ffx_message.h>
+
+#ifdef _WIN
+#include <windows.h>
+#endif
 
 #include "core/backend_interface.h"
 #include "core/components/meshcomponent.h"
@@ -54,7 +62,38 @@ struct GIConstants
 
 void BrixelizerGIRenderModule::Init(const json& initData)
 {
-    m_PrevProjection = Mat4::Matrix4(0.0f);
+    // [test hook, not part of the upstream sample] Headless driving:
+    //  * BRIXGI_OUTPUT_MODE forces the Output Mode (diffusegi/speculargi/radiance/
+    //    irradiance/debugvis/example/none) instead of using the ImGui combo.
+    //  * BRIXGI_EXIT_FRAMES auto-exits the app after N frames (the framework's
+    //    "Screenshot" config key then dumps the last swapchain frame to file in
+    //    PostRun, which is how the Step-0 reference shots are captured).
+    //  * FFX messages (errors/warnings from the SDK) are mirrored to stdout so a
+    //    run can be validated for "no FFX errors" from the log alone.
+    if (const char* mode = std::getenv("BRIXGI_OUTPUT_MODE"))
+    {
+        if (!strcmp(mode, "diffusegi"))        m_OutputMode = OutputMode::DiffuseGI;
+        else if (!strcmp(mode, "speculargi"))  m_OutputMode = OutputMode::SpecularGI;
+        else if (!strcmp(mode, "radiance"))    m_OutputMode = OutputMode::RadianceCache;
+        else if (!strcmp(mode, "irradiance"))  m_OutputMode = OutputMode::IrradianceCache;
+        else if (!strcmp(mode, "debugvis"))    m_OutputMode = OutputMode::DebugVisualization;
+        else if (!strcmp(mode, "example"))     m_OutputMode = OutputMode::ExampleShader;
+        else                                    m_OutputMode = OutputMode::None;
+        wprintf(L"[brixgi-test] Output Mode forced to '%hs'\n", mode);
+    }
+    ffxSetPrintMessageCallback(
+        [](uint32_t type, const wchar_t* message) {
+            if (!message)
+                return;
+            const wchar_t* level = (type == FFX_MESSAGE_TYPE_ERROR) ? L"ERROR"
+                            : (type == FFX_MESSAGE_TYPE_WARNING) ? L"WARNING" : L"INFO";
+            fwprintf(stdout, L"[FFX %s] %ls\n", level, message);
+        },
+        0);
+
+    // [clang patch] `Mat4::Matrix4(0.0f)` is a qualified constructor call —
+    // MSVC-only; use the functional form.
+    m_PrevProjection = Mat4(0.0f);
 
     m_pColorTarget        = GetFramework()->GetColorTargetForCallback(GetName());
     m_pDiffuseTexture     = GetFramework()->GetRenderTexture(L"GBufferAlbedoRT");
@@ -177,7 +216,10 @@ void BrixelizerGIRenderModule::Init(const json& initData)
 
         PipelineDesc pipelineDesc;
         pipelineDesc.SetRootSignature(m_pExampleRootSignature);
-        pipelineDesc.AddShaderDesc(ShaderBuildDesc::Compute(L"brixelizergiexample.hlsl", L"MainCS", ShaderModel::SM6_0, &defineList));
+        // [clang patch] AddShaderDesc takes a non-const reference; MSVC binds
+        // temporaries to it, clang does not — use a named variable.
+        ShaderBuildDesc exampleShaderDesc = ShaderBuildDesc::Compute(L"brixelizergiexample.hlsl", L"MainCS", ShaderModel::SM6_0, &defineList);
+        pipelineDesc.AddShaderDesc(exampleShaderDesc);
 
         m_pExamplePipeline = PipelineObject::CreatePipelineObject(L"BrixelizerExamplePass_PipelineObj", pipelineDesc);
     }
@@ -197,7 +239,8 @@ void BrixelizerGIRenderModule::Init(const json& initData)
 
         PipelineDesc pipelineDesc;
         pipelineDesc.SetRootSignature(m_pPassThroughRootSignature);
-        pipelineDesc.AddShaderDesc(ShaderBuildDesc::Compute(L"copytexture.hlsl", L"CopyTextureCS", ShaderModel::SM6_0, &defineList));
+        ShaderBuildDesc copyShaderDesc = ShaderBuildDesc::Compute(L"copytexture.hlsl", L"CopyTextureCS", ShaderModel::SM6_0, &defineList);
+        pipelineDesc.AddShaderDesc(copyShaderDesc);
 
         m_pPassThroughPipeline = PipelineObject::CreatePipelineObject(L"BrixelizerGICopyHistoryPass_PipelineObj", pipelineDesc);
     }
@@ -256,7 +299,9 @@ void BrixelizerGIRenderModule::Init(const json& initData)
 
         // Setup the shaders to build on the pipeline object
         std::wstring shaderPath = L"lightinggi.hlsl";
-        psoDesc.AddShaderDesc(ShaderBuildDesc::Compute(shaderPath.c_str(), L"MainCS", ShaderModel::SM6_0, &defineList));
+        // [clang patch] see exampleShaderDesc above (non-const ref param).
+        ShaderBuildDesc lightingShaderDesc = ShaderBuildDesc::Compute(shaderPath.c_str(), L"MainCS", ShaderModel::SM6_0, &defineList);
+        psoDesc.AddShaderDesc(lightingShaderDesc);
 
         m_pDeferredLightingPipeline = PipelineObject::CreatePipelineObject(L"LightingRenderModule_PipelineObj", psoDesc);
 
@@ -410,6 +455,17 @@ void BrixelizerGIRenderModule::Execute(double deltaTime, CommandList* pCmdList)
     }
 
     ++m_FrameIndex;
+
+    // [test hook] Frame-limited exit (see Init for BRIXGI_EXIT_FRAMES).
+    static const int32_t exitFrames = []() {
+        const char* env = std::getenv("BRIXGI_EXIT_FRAMES");
+        return env ? std::atoi(env) : 0;
+    }();
+    if (exitFrames > 0 && (int32_t)m_FrameIndex >= exitFrames)
+    {
+        wprintf(L"[brixgi-test] reached frame %u, exiting\n", m_FrameIndex);
+        PostQuitMessage(0);
+    }
 }
 
 void BrixelizerGIRenderModule::OnResize(const cauldron::ResolutionInfo& resInfo)
@@ -1024,7 +1080,10 @@ void BrixelizerGIRenderModule::UpdateBrixelizerGIContext(cauldron::CommandList* 
         memcpy(&m_GIDispatchDesc.prevProjection, &m_PrevProjection, sizeof(m_GIDispatchDesc.prevProjection));
         m_PrevProjection = projection;
 
-        memcpy(&m_GIDispatchDesc.cameraPosition, &camera->GetCameraPos(), sizeof(m_GIDispatchDesc.cameraPosition));
+        // [clang patch] GetCameraPos() returns a by-value Vec3; MSVC allows
+        // &temporary, clang warns — bind to a named object first.
+        const Vec3 giCameraPos = camera->GetCameraPos();
+        memcpy(&m_GIDispatchDesc.cameraPosition, &giCameraPos, sizeof(m_GIDispatchDesc.cameraPosition));
 
         m_GIDispatchDesc.startCascade        = m_StartCascadeIdx + (2 * NUM_BRIXELIZER_CASCADES);
         m_GIDispatchDesc.endCascade          = m_EndCascadeIdx + (2 * NUM_BRIXELIZER_CASCADES);

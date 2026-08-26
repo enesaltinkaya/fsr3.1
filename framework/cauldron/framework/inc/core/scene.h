@@ -309,7 +309,7 @@ namespace cauldron
         BoundingBox                 m_BoundingBox;
 
         // IBL Texture
-        const Texture* m_pIBLTexture[IBLTexture::Count] = { nullptr };
+        const Texture* m_pIBLTexture[static_cast<std::size_t>(IBLTexture::Count)] = { nullptr };
         // BRDF Texture
         const Texture* m_pBRDFTexture = nullptr;
         // ScreenSpace ShadowTexture

@@ -165,7 +165,7 @@ private:
         PipelineSurfaceRenderInfo m_RenderSurface  = {};
         cauldron::PipelineObject* m_Pipeline       = nullptr;
         uint32_t                  m_UsedAttributes = 0;
-        operator float() { return -m_depth; }
+        operator float() const { return -m_depth; } // [clang patch] const conversion op (libc++ sort compares via const refs)
     };
     std::vector<TranslucentRenderData> m_TranslucentRenderSurfaces;
 
@@ -187,7 +187,7 @@ private:
         PipelineParticlesRenderInfo m_RenderParticles = {};
         cauldron::PipelineObject*   m_Pipeline        = nullptr;
         bool                        m_ReadyForFrame   = false;
-        operator float() { return -m_depth; }
+        operator float() const { return -m_depth; }
     };
     std::vector<ParticlesRenderData> m_RenderParticleSpawners;
 };

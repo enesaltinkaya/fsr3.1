@@ -150,7 +150,9 @@ void RasterShadowRenderModule::Execute(double deltaTime, CommandList* pCmdList)
         CauldronAssert(ASSERT_CRITICAL, pShadowMapTarget != nullptr, L"Unable to get a shadow map");
 
         // Do clears
-        ClearDepthStencil(pCmdList, &shadowMapInfo.pRasterView->GetResourceView(), 0);
+        // [clang patch] GetResourceView() returns by value; bind first.
+        ResourceViewInfo shadowMapRTV = shadowMapInfo.pRasterView->GetResourceView();
+        ClearDepthStencil(pCmdList, &shadowMapRTV, 0);
 
         // Bind raster resources
         BeginRaster(pCmdList, 0, nullptr, shadowMapInfo.pRasterView);
@@ -404,7 +406,7 @@ void RasterShadowRenderModule::OnContentUnloaded(ContentBlock* pContentBlock)
                     for (auto& pipelineGroup : m_PipelineRenderGroups)
                     {
                         bool surfaceFound = false;
-                        for (auto& surfaceItr = pipelineGroup.m_RenderSurfaces.begin(); surfaceItr != pipelineGroup.m_RenderSurfaces.end(); ++surfaceItr)
+                        for (auto surfaceItr = pipelineGroup.m_RenderSurfaces.begin(); surfaceItr != pipelineGroup.m_RenderSurfaces.end(); ++surfaceItr)
                         {
                             if (surfaceItr->pOwner == pOwner && surfaceItr->pSurface == pSurface)
                             {

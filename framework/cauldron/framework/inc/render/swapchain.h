@@ -26,6 +26,11 @@
 #include "render/resourceview.h"
 #include "shaders/shadercommon.h"
 
+// [clang patch] used by DumpSwapChainToFile below (upstream relied on
+// transitive includes).
+#include <experimental/filesystem>
+#include <cstdint>
+
 namespace cauldron
 {
     class SwapChainRenderTarget;
@@ -124,7 +129,8 @@ namespace cauldron
         /**
          * @brief   Gets the last present count for the swapchain.
          */
-        virtual void GetLastPresentCount(UINT* pLastPresentCount) { *pLastPresentCount = 0; }
+        // [clang patch] UINT is a windows.h type not visible here; use uint32_t.
+        virtual void GetLastPresentCount(uint32_t* pLastPresentCount) { *pLastPresentCount = 0; }
 
         /**
          * @brief   Gets the current refresh rate for the swapchain.

@@ -139,15 +139,21 @@ void GBufferRenderModule::Execute(double deltaTime, CommandList* pCmdList)
 
     // Do clears
     float clearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-    ClearRenderTarget(pCmdList, &m_RasterViews[0]->GetResourceView(), clearColor);
-    ClearRenderTarget(pCmdList, &m_RasterViews[1]->GetResourceView(), clearColor);
-    ClearRenderTarget(pCmdList, &m_RasterViews[2]->GetResourceView(), clearColor);
+    // [clang patch] GetResourceView() returns by value; bind to names first.
+    ResourceViewInfo gbufferRTV0 = m_RasterViews[0]->GetResourceView();
+    ClearRenderTarget(pCmdList, &gbufferRTV0, clearColor);
+    ResourceViewInfo gbufferRTV1 = m_RasterViews[1]->GetResourceView();
+    ClearRenderTarget(pCmdList, &gbufferRTV1, clearColor);
+    ResourceViewInfo gbufferRTV2 = m_RasterViews[2]->GetResourceView();
+    ClearRenderTarget(pCmdList, &gbufferRTV2, clearColor);
     if (m_GenerateMotionVectors)
     {
-        ClearRenderTarget(pCmdList, &m_RasterViews[3]->GetResourceView(), clearColor);
+        ResourceViewInfo gbufferRTV3 = m_RasterViews[3]->GetResourceView();
+        ClearRenderTarget(pCmdList, &gbufferRTV3, clearColor);
     }
 
-    ClearDepthStencil(pCmdList, &m_RasterViews[4]->GetResourceView(), 0);
+    ResourceViewInfo gbufferRTV4 = m_RasterViews[4]->GetResourceView();
+    ClearDepthStencil(pCmdList, &gbufferRTV4, 0);
 
     // Bind raster resources
     BeginRaster(pCmdList, m_GenerateMotionVectors ? 4 : 3, m_RasterViews.data(), m_RasterViews[4], m_VariableShading ? GetDevice()->GetVRSInfo() : nullptr);
@@ -404,7 +410,7 @@ void GBufferRenderModule::OnContentUnloaded(ContentBlock* pContentBlock)
                     for (auto& pipelineGroup : m_PipelineRenderGroups)
                     {
                         bool surfaceFound = false;
-                        for (auto& surfaceItr = pipelineGroup.m_RenderSurfaces.begin(); surfaceItr != pipelineGroup.m_RenderSurfaces.end(); ++surfaceItr)
+                        for (auto surfaceItr = pipelineGroup.m_RenderSurfaces.begin(); surfaceItr != pipelineGroup.m_RenderSurfaces.end(); ++surfaceItr)
                         {
                             if (surfaceItr->pOwner == pOwner && surfaceItr->pSurface == pSurface)
                             {

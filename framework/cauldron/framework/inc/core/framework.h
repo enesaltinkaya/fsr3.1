@@ -115,51 +115,51 @@ namespace cauldron
         // Binary options
 
         // Validation
-        bool CPUValidationEnabled : 1;
-        bool GPUValidationEnabled : 1;
+        bool CPUValidationEnabled;
+        bool GPUValidationEnabled;
 
         // Features
-        bool VRSTier1 : 1;
-        bool VRSTier2 : 1;
-        bool RT_1_0 : 1;
-        bool RT_1_1 : 1;
-        bool FP16 : 1;
-        bool ShaderStorageBufferArrayNonUniformIndexing : 1;
+        bool VRSTier1;
+        bool VRSTier2;
+        bool RT_1_0;
+        bool RT_1_1;
+        bool FP16;
+        bool ShaderStorageBufferArrayNonUniformIndexing;
 
         // Presentation
-        bool Vsync : 1;
-        bool Fullscreen    : 1;
+        bool Vsync;
+        bool Fullscreen;
 
         // Other options
-        bool DeveloperMode : 1;
-        bool DebugShaders : 1;
-        bool AGSEnabled : 1;
-        bool StablePowerState : 1;
-        bool InvertedDepth : 1;
-        bool AntiLag2 : 1;
+        bool DeveloperMode;
+        bool DebugShaders;
+        bool AGSEnabled;
+        bool StablePowerState;
+        bool InvertedDepth;
+        bool AntiLag2;
 
         // RenderDoc
-        bool EnableRenderDocCapture : 1;
+        bool EnableRenderDocCapture;
         // Pix
-        bool EnablePixCapture : 1;
+        bool EnablePixCapture;
 
         // Override Scene Samplers
-        bool OverrideSceneSamplers : 1;
+        bool OverrideSceneSamplers;
 
         // Perf Dump
-        bool EnableBenchmark : 1;
-        bool BenchmarkAppend : 1;
-        bool BenchmarkJson   : 1;
+        bool EnableBenchmark;
+        bool BenchmarkAppend;
+        bool BenchmarkJson;
 
         // Screen shot
-        bool TakeScreenshot : 1;
+        bool TakeScreenshot;
 
         // FPS limiter
-        bool LimitFPS : 1;
-        bool GPULimitFPS : 1;
+        bool LimitFPS;
+        bool GPULimitFPS;
 
         // Acceleration Structure
-        bool BuildRayTracingAccelerationStructure : 1;
+        bool BuildRayTracingAccelerationStructure;
 
         //////////////////////////////////////////////////////////////////////////
         // Non-binary data
@@ -268,6 +268,10 @@ namespace cauldron
         wchar_t* CmdLine;               ///< Command line parameters from application instance
         void*    AdditionalParams;      ///< Additional parameters from application instance
     };
+
+    // Forward declaration (MSVC implicitly forward-declares classes used as
+    // pointer types; clang requires an explicit declaration).
+    class Framework;
 
     /**
      * @class FrameworkImpl

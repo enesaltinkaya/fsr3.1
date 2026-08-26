@@ -75,7 +75,7 @@ namespace cauldron
         }
 
         m_pResource = GPUResource::CreateGPUResource(m_BufferDesc.Name.c_str(), customOwner, initialState, &initParams, m_ResizeFn != nullptr);
-        CauldronAssert(ASSERT_ERROR, m_pResource != nullptr, L"Could not create GPU resource for buffer %ls", m_BufferDesc.Name);
+        CauldronAssert(ASSERT_ERROR, m_pResource != nullptr, L"Could not create GPU resource for buffer %ls", m_BufferDesc.Name.c_str());
     }
 
     void BufferInternal::CopyData(const void* pData, size_t size)

@@ -30,6 +30,8 @@
 
 #if defined(_WINDOWS)
     #include <io.h>
+    // [clang patch] MSVC pulled this in transitively; _SH_DENYNO lives here.
+    #include <share.h>
     #define S_ISREG(e) (((e) & _S_IFMT) == _S_IFREG)
     #define S_ISDIR(e) (((e) & _S_IFMT) == _S_IFDIR)
 #else

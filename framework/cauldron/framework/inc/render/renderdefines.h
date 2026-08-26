@@ -436,7 +436,11 @@ namespace cauldron
     /// DefineList, holds pairs of key & value that will be used by the compiler as defines
     ///
     /// @ingroup CauldronRender
-    using DefineList = std::map<const std::wstring, std::wstring>;
+    // [clang patch] the const key type (std::map<const std::wstring, ...>) is
+    // an MSVC-STL quirk: such a map's value_type (pair<const wstring, wstring>)
+    // is not copy-assignable in libc++/clang, breaking std::map::operator=.
+    // The standard form (non-const key) behaves identically.
+    using DefineList = std::map<std::wstring, std::wstring>;
 
     /// An enumeration for shader binding stages
     ///

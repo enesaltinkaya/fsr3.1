@@ -178,6 +178,10 @@ namespace cauldron
         friend class ParticleLoader;
         friend class GPUParticleRenderModule;
         friend class TranslucencyRenderModule;
+        // [clang patch] the render modules live in the global namespace;
+        // the declarations above name cauldron-scope classes (MSVC
+        // resolved the access with lenient lookup).
+        friend class ::TranslucencyRenderModule;
     };
 
 }  // namespace cauldron

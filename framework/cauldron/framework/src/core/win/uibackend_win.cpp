@@ -864,6 +864,10 @@ namespace cauldron
         }
     }
 
+    // [clang patch] out-of-class definitions of a virtual member for a
+    // concrete type are explicit specializations (MSVC accepted them
+    // without the prefix).
+    template <>
     void UISlider<int32_t>::BuildUI()
     {
         int32_t cur = GetData();
@@ -874,6 +878,7 @@ namespace cauldron
         }
     }
 
+    template <>
     void UISlider<float>::BuildUI()
     {
         float cur = GetData();

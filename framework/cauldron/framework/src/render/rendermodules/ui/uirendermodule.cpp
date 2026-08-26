@@ -491,7 +491,9 @@ namespace cauldron
 
                 // Select the render target
                 const RasterView* pRTRasterView = (m_bRenderToTexture ? m_pUiOnlyRasterView[m_curUiTextureIndex] : m_pUIRasterView);
-                Render(pCmdList, &pRTRasterView->GetResourceView(), &renderParams);
+                // [clang patch] GetResourceView() returns by value; bind first.
+                ResourceViewInfo uiRenderTargetRTV = pRTRasterView->GetResourceView();
+                Render(pCmdList, &uiRenderTargetRTV, &renderParams);
 
                 // Render modules expect resources coming in/going out to be in a shader read state
                 rtBarrier.SourceState = rtBarrier.DestState;
@@ -512,7 +514,9 @@ namespace cauldron
         if (m_bRenderToTexture)
         {
             float clearColor[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-            ClearRenderTarget(pCmdList, &m_pUiOnlyRasterView[m_curUiTextureIndex]->GetResourceView(), clearColor);
+            // [clang patch] GetResourceView() returns by value; bind first.
+            ResourceViewInfo uiOnlyRTV = m_pUiOnlyRasterView[m_curUiTextureIndex]->GetResourceView();
+            ClearRenderTarget(pCmdList, &uiOnlyRTV, clearColor);
         }
 
         BeginRaster(pCmdList, 1, pRTViewInfo);

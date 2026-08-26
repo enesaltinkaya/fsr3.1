@@ -26,6 +26,10 @@
 
 namespace cauldron
 {
+    // [clang patch] ODR-used via `const bool&` parameters; MSVC emitted a
+    // weak definition, clang requires the out-of-class one.
+    const bool UIElement::AlwaysEnable;
+
     UIManager::UIManager()
     {
         // Create the UI back end

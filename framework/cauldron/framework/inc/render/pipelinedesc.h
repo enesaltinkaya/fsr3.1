@@ -136,7 +136,7 @@ namespace cauldron
         /**
          * @brief   Add a shader to the pipeline description.
          */
-        void AddShaderDesc(ShaderBuildDesc& shaderDesc);
+        void AddShaderDesc(ShaderBuildDesc shaderDesc);
 
         /**
          * @brief   Add a shader blob to the pipeline description.

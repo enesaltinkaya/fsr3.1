@@ -387,7 +387,13 @@ namespace cauldron
         {
             // Fetch the RM instance (and do a sanity check)
             CauldronAssert(ASSERT_CRITICAL, StringToWString(iter->Name) == (*iterRM)->GetName(), L"Mismatch in RenderModule order and Config RenderModule order. Cannot properly initialize. Abort!");
-            (*iterRM)->Init(iter->InitOptions);
+            // [brixgi patch] a name-only "RenderModules" list leaves InitOptions
+            // null, and the modules call .value() on it (nlohmann throws on
+            // null). Hand them an empty object instead — every lookup then
+            // simply falls back to the module defaults.
+            static const json emptyInitOptions = json::object();
+            const json& initOptions = iter->InitOptions.is_null() ? emptyInitOptions : iter->InitOptions;
+            (*iterRM)->Init(initOptions);
         }
 
         // Initialize the sample side (and quit now if something goes wrong)
@@ -1027,7 +1033,9 @@ namespace cauldron
                     if (filesystem::exists(configPath))
                     {
                         json rmConfigData;
-                        CauldronAssert(ASSERT_CRITICAL, ParseJsonFile(configPath.c_str(), rmConfigData), L"Could not parse JSON file %ls", rmInfo.Name);
+                        // [clang patch] MSVC allows passing std::string through
+                        // variadics; clang rejects non-POD varargs.
+                        CauldronAssert(ASSERT_CRITICAL, ParseJsonFile(configPath.c_str(), rmConfigData), L"Could not parse JSON file %ls", rmInfo.Name.c_str());
 
                         // Get the sample configuration
                         json configData = rmConfigData[rmInfo.Name];
@@ -2087,7 +2095,7 @@ namespace cauldron
                         desc.Height = renderingHeight;
                     });
 
-                CauldronAssert(ASSERT_ERROR, pRenderTarget, L"Could not create render target %ls", iter->first);
+                CauldronAssert(ASSERT_ERROR, pRenderTarget, L"Could not create render target %ls", iter->first.c_str());
                 if (!pRenderTarget)
                     return -1;
             }
@@ -2100,7 +2108,7 @@ namespace cauldron
                         desc.Height = displayHeight;
                     });
 
-                CauldronAssert(ASSERT_ERROR, pRenderTarget, L"Could not create render target %ls", iter->first);
+                CauldronAssert(ASSERT_ERROR, pRenderTarget, L"Could not create render target %ls", iter->first.c_str());
                 if (!pRenderTarget)
                     return -1;
             }

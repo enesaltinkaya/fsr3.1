@@ -63,8 +63,9 @@ void FPSLimiterRenderModule::Init(const json& initData)
     // Create FPS limiter buffer and transition it right away
     BufferDesc bufDesc = BufferDesc::Data(L"FPSLimiter_Buffer", BufferLength, 4, 0, ResourceFlags::AllowUnorderedAccess);
     m_pBuffer          = Buffer::CreateBufferResource(&bufDesc, ResourceState::CommonResource);
-    GetDevice()->ExecuteResourceTransitionImmediate(
-        1, &Barrier::Transition(m_pBuffer->GetResource(), ResourceState::CommonResource, ResourceState::UnorderedAccess));
+    // [clang patch] no address-of-temporary; bind the barrier to a name first.
+    Barrier fpsLimiterBarrier = Barrier::Transition(m_pBuffer->GetResource(), ResourceState::CommonResource, ResourceState::UnorderedAccess);
+    GetDevice()->ExecuteResourceTransitionImmediate(1, &fpsLimiterBarrier);
 
     // Root signature
     RootSignatureDesc signatureDesc;

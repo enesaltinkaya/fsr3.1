@@ -24,6 +24,7 @@
 
 #include <condition_variable>
 #include <mutex>
+#include <stdexcept>
 
 namespace cauldron
 {
@@ -125,7 +126,12 @@ namespace cauldron
                 m_cv.wait(lk, [this] { return this->m_closed || this->m_size < CAPACITY; });
                 if (!m_closed)
                 {
-                    CauldronAssert(ASSERT_CRITICAL, m_size < CAPACITY, L"Ring buffer is full");
+                    // NOTE: the upstream code used CauldronAssert(ASSERT_CRITICAL, ...) here,
+                    // which requires misc/assert.h to be visible at template-definition time.
+                    // That header cycles through log.h (which needs this class to be complete),
+                    // so the assert is replaced with a direct throw (same fatal semantics).
+                    if (!(m_size < CAPACITY))
+                        throw std::runtime_error("Ring buffer is full");
                     size_t index = (m_startIndex + m_size) % CAPACITY;
                     m_data[index] = std::move(item);
                     ++m_size;

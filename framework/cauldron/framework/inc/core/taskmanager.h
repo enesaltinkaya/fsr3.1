@@ -114,7 +114,7 @@ namespace cauldron
         /**
          * @brief   Enqueues a task for execution.
          */
-        void AddTask(Task& newTask);
+        void AddTask(Task newTask);
 
         /**
          * @brief   Enqueues multiple tasks for execution.

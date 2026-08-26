@@ -355,8 +355,11 @@ void ToneMappingRenderModule::Execute(double deltaTime, CommandList* pCmdList)
         ResourceBarrier(pCmdList, static_cast<uint32_t> (barriers.size()), barriers.data());
 
         float clearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-        ClearRenderTarget(pCmdList, &m_pDistortionFieldRasterView[0]->GetResourceView(), clearColor);
-        ClearRenderTarget(pCmdList, &m_pDistortionFieldRasterView[1]->GetResourceView(), clearColor);
+        // [clang patch] GetResourceView() returns by value; bind to names first.
+        ResourceViewInfo distortionFieldRTV0 = m_pDistortionFieldRasterView[0]->GetResourceView();
+        ClearRenderTarget(pCmdList, &distortionFieldRTV0, clearColor);
+        ResourceViewInfo distortionFieldRTV1 = m_pDistortionFieldRasterView[1]->GetResourceView();
+        ClearRenderTarget(pCmdList, &distortionFieldRTV1, clearColor);
         shouldClearRenderTargets = false;
             
         barriers.clear();

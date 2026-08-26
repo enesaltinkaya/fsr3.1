@@ -94,7 +94,9 @@ namespace cauldron
         Barrier barrier = Barrier::Transition(m_pRenderTarget->GetCurrentResource(), ResourceState::NonPixelShaderResource | ResourceState::PixelShaderResource, ResourceState::RenderTargetResource);
         ResourceBarrier(pCmdList, 1, &barrier);
 
-        ClearRenderTarget(pCmdList, &GetFramework()->GetSwapChain()->GetBackBufferRTV(), m_pBackbufferClearColor);
+        // [clang patch] GetBackBufferRTV() returns by value; bind first.
+        ResourceViewInfo backBufferRTV = GetFramework()->GetSwapChain()->GetBackBufferRTV();
+        ClearRenderTarget(pCmdList, &backBufferRTV, m_pBackbufferClearColor);
 
         BeginRaster(pCmdList, 1, &m_pRasterView);
 

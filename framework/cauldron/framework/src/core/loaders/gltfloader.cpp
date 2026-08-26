@@ -828,7 +828,7 @@ namespace cauldron
             int attributeID = attributes[attributeName];
             auto& accessor = accessors[attributeID];
 
-            std::string& type = accessor["type"].get<std::string>();
+            std::string type = accessor["type"].get<std::string>();
             uint32_t resourceFormatDimension = ResourceFormatDimension(type);
 
             int32_t resourceFormatType = accessor["componentType"];
@@ -937,7 +937,7 @@ namespace cauldron
 
             info.Count = accessor["count"].get<uint32_t>();
 
-            std::string& type = accessor["type"].get<std::string>();
+            std::string type = accessor["type"].get<std::string>();
             CauldronAssert(ASSERT_ERROR, type == "SCALAR", L"Indices types are only scalar");
 
             // create buffer
@@ -1136,8 +1136,8 @@ namespace cauldron
             {
                 auto& maxAccessor = (*pPosAccessor)["max"];
                 auto& minAccessor = (*pPosAccessor)["min"];
-                Vec4 max = Vec4(maxAccessor[0], maxAccessor[1], maxAccessor[2], maxAccessor.size() == 4 ? maxAccessor[3] : 0);
-                Vec4 min = Vec4(minAccessor[0], minAccessor[1], minAccessor[2], minAccessor.size() == 4 ? minAccessor[3] : 0);
+                Vec4 max = Vec4(maxAccessor[0], maxAccessor[1], maxAccessor[2], maxAccessor.size() == 4 ? static_cast<int>(maxAccessor[3]) : 0);
+                Vec4 min = Vec4(minAccessor[0], minAccessor[1], minAccessor[2], minAccessor.size() == 4 ? static_cast<int>(minAccessor[3]) : 0);
 
                 pSurface->Center() = (min + max) * 0.5f;
                 pSurface->Radius() = max - pMeshResource->GetSurface(i)->Center();

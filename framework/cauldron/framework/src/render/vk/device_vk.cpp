@@ -49,12 +49,12 @@ extern "C" void     volkLoadDevice(VkDevice device);
 // macro to get the procedure address of vulkan extensions
 #define GET_INSTANCE_PROC_ADDR(name) m_##name = (PFN_##name)vkGetInstanceProcAddr(m_Instance, #name)
 #define GET_DEVICE_PROC_ADDR(name) m_##name = (PFN_##name)vkGetDeviceProcAddr(m_Device, #name)
-#define SET_FEATURE_IF_SUPPORTED(name) physicalDeviceFeatures.##name = supportedPhysicalDeviceFeatures.##name;\
-                                       CauldronAssert(ASSERT_WARNING, physicalDeviceFeatures.##name == VK_TRUE, L"" #name " physical device feature requested but not supported");
+#define SET_FEATURE_IF_SUPPORTED(name) physicalDeviceFeatures.name = supportedPhysicalDeviceFeatures.name;\
+                                       CauldronAssert(ASSERT_WARNING, physicalDeviceFeatures.name == VK_TRUE, L"" #name " physical device feature requested but not supported");
 
-#define CHECK_FEATURE_SUPPORT(name) CauldronAssert(ASSERT_WARNING, physicalDeviceFeatures.##name == VK_TRUE, L"" #name " physical device feature requested but not supported");
-#define CHECK_FEATURE_SUPPORT_11(name) CauldronAssert(ASSERT_WARNING, vulkan11Features.##name == VK_TRUE, L"" #name " physical device feature for Vulkan 1.1 requested but not supported");
-#define CHECK_FEATURE_SUPPORT_12(name) CauldronAssert(ASSERT_WARNING, vulkan12Features.##name == VK_TRUE, L"" #name " physical device feature for Vulkan 1.2 requested but not supported");
+#define CHECK_FEATURE_SUPPORT(name) CauldronAssert(ASSERT_WARNING, physicalDeviceFeatures.name == VK_TRUE, L"" #name " physical device feature requested but not supported");
+#define CHECK_FEATURE_SUPPORT_11(name) CauldronAssert(ASSERT_WARNING, vulkan11Features.name == VK_TRUE, L"" #name " physical device feature for Vulkan 1.1 requested but not supported");
+#define CHECK_FEATURE_SUPPORT_12(name) CauldronAssert(ASSERT_WARNING, vulkan12Features.name == VK_TRUE, L"" #name " physical device feature for Vulkan 1.2 requested but not supported");
 
 #define HAS_QUEUE_FAMILY_FLAG(flag) ((queueProps[i].queueFlags & flag) == flag)
 
@@ -505,6 +505,23 @@ namespace cauldron
                 break;
             }
         }
+
+        // [brixgi patch] some drivers (e.g. RADV) don't expose a dedicated
+        // transfer-only family; fall back to any family with transfer
+        // capability (shared with graphics/compute).
+        if (families.queues[RequestedQueue::Copy].family == UINT32_MAX)
+        {
+            for (uint32_t i = 0; i < queueFamilyCount; ++i)
+            {
+                if (HAS_QUEUE_FAMILY_FLAG(VK_QUEUE_TRANSFER_BIT) && (queueAvailability[i].queueCount > 0))
+                {
+                    families.queues[RequestedQueue::Copy].family = i;
+                    --queueAvailability[i].queueCount;
+                    break;
+                }
+            }
+        }
+
         CauldronAssert(ASSERT_CRITICAL, families.queues[RequestedQueue::Copy].family != UINT32_MAX, L"Unable to get a copy queue.");
 
         // Queues for frame interpolation
@@ -635,6 +652,9 @@ namespace cauldron
         const CauldronConfig* pConfig = GetConfig();
 
         // object to help create the instance
+        // [ffx fork patch] volk must be initialized before the InstanceCreator
+        // constructor runs: it calls volk-dispatched vkEnumerate* entry points.
+        volkInitialize();
         InstanceCreator instanceCreator;
 
         VkApplicationInfo app_info  = {};
@@ -670,7 +690,6 @@ namespace cauldron
         }
 
         // Create the instance
-        volkInitialize();  // FFX fork patch
         m_Instance = instanceCreator.Create(app_info);
 
         VkResult res = VK_SUCCESS;

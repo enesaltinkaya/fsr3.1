@@ -33,13 +33,23 @@
 #define RMFOLDER(x)  x##/
 #define RMFILE(x)    x##rendermodule.h
 
-#define RMCLASS(x)   PUT(x)##RenderModule
+#define RMCLASS(x)   RMCLASS_IMPL(x)
+// [clang patch] `PUT(x)##RenderModule` relied on MSVC pasting the *expanded*
+// macro call (clang pastes the literal `)` token); two-stage instead.
+#define RMCLASS_IMPL(name) name##RenderModule
 #define RMSTRING(x)  AS_STRING(RMCLASS(x))
 
 #define PATH(x)      RMFOLDER(x)## RMFILE(x)
 
 // Sample render module
-#include AS_STRING(PATH(RenderModuleName))
+// [clang patch] the `x##/` paste + AS_STRING include trick is MSVC-only
+// (clang rejects pasting a punctuator, and `#include` does not splice
+// adjacent string literals). Paste an identifier instead (two-stage so the
+// module name expands first); a compat shim (`<Name>rendermodule_h.h`)
+// resolves the actual module header.
+#define MODULE_HEADER_IMPL(name) AS_STRING(name##rendermodule_h)
+#define MODULE_HEADER(x) MODULE_HEADER_IMPL(x)
+#include MODULE_HEADER(RenderModuleName)
 
 #endif // #if defined(RenderModuleName)
 

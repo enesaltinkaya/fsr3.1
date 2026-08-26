@@ -29,6 +29,8 @@
 #include "misc/math.h"
 
 #include <algorithm>
+// [clang patch] MSVC pulled this in transitively; FLT_MAX lives here.
+#include <cfloat>
 
 namespace cauldron
 {
