@@ -28,6 +28,67 @@
 #include <stdio.h>    // fprintf (FFX_BRIX_LOG diagnostic)
 #include <stdlib.h>   // getenv/atoi (FFX_BRIX_LOG diagnostic)
 
+/* Fork diagnostic (FFX_BRIX_DIAG): one-shot, pipeline-end scratch dump for
+ * cascade 0. The copy is scheduled at the same point FFX copies the 40-byte
+ * cascade counters (i.e. after the cascade pipeline, before the context
+ * tail passes), into the cascade-0 readback ring slot 0 (enlarged to
+ * FFX_BRIX_DIAG_SIZE when the flag is on). Layout of the dump (dst offset:
+ * source partition @ scratch offset, size):
+ *   4096         : bricks_compression_list     @ 350224640, 256 KiB
+ *   260096       : bricks_storage_offsets      @ 349176064, 256 KiB
+ *   516096       : cr1_references              @ 352322560, 256 KiB
+ *   772096       : cr1_compacted_references    @ 754975744, 256 KiB
+ *   1028096      : cr1_ref_counters            @ 889193472, 1 MiB
+ *   2114176      : cr1_ref_counter_scan        @ 890242048, 1 MiB
+ *   3162624      : cr1_stamp_scan              @ 891294720, 1 MiB
+ *   4211072      : cr1_stamp_global_scan       @ 892343296, 4 KiB
+ *   4215168      : bricks_storage[0..127]      @ 315621632, 256 KiB
+ * (offsets from the FFX_BRIX_LOG_LAYOUT ground-truth dump; the [0, 4096)
+ *  head is left to the normal 40-byte counter copy, which never overlaps) */
+#define FFX_BRIX_DIAG_SIZE 6291456u
+static uint8_t* g_brixDiagHost      = NULL;
+static bool     g_brixDiagRead      = false;
+static uint32_t g_brixDiagScheduled = 0;
+static uint32_t g_brixDiagUpdates   = 0;
+static bool brixDiagOn()
+{
+    static int cached = -1;
+    if (cached < 0) {
+        const char* e = getenv("FFX_BRIX_DIAG");
+        cached = (e && e[0] == '1') ? 1 : 0;
+    }
+    return cached == 1;
+}
+
+/* FFX_BRIX_DIAG_AT=<frame>: capture the dump at this FFX frame index instead
+ * of the first qualifying cascade-0 update (0 = first, the old behaviour).
+ * FFX_BRIX_DIAG_COUNT=<n>: capture n CONSECUTIVE cascade-0 updates from that
+ * point (max 5) — each into its own 1052680-byte region: [0,40) counters,
+ * [8192, 12288) compression-list head, [1048576, 2097152) cr1_ref_counters.
+ * The allocating bake and the following re-submission bakes differ (freshly
+ * allocated voxels keep their ref counters; already-bricked ones get cleared),
+ * so a window of consecutive bakes always contains the allocating one. */
+static uint32_t brixDiagAt()
+{
+    static int cached = -1;
+    if (cached < 0) {
+        const char* e = getenv("FFX_BRIX_DIAG_AT");
+        cached = (e && *e) ? atoi(e) : 0;
+    }
+    return (uint32_t)cached;
+}
+static uint32_t brixDiagCount()
+{
+    static int cached = -1;
+    if (cached < 0) {
+        const char* e = getenv("FFX_BRIX_DIAG_COUNT");
+        cached = (e && *e) ? atoi(e) : 1;
+        if (cached < 1) cached = 1;
+        if (cached > 5) cached = 5;
+    }
+    return (uint32_t)cached;
+}
+
 #define FFX_CPU
 #include <FidelityFX/gpu/ffx_core.h>
 #include <FidelityFX/gpu/brixelizer/ffx_brixelizer_host_gpu_shared_private.h>
@@ -1595,6 +1656,62 @@ static FfxErrorCode brixelizerDispatchUpdateCascade(FfxBrixelizerRawContext_Priv
                      L"Copy Scratch Counters");
 
         context->cascadeCounterPositions[cascade->info.index] = (cascadeCounterPos + 1) % 3;
+
+        /* FFX_BRIX_DIAG: one-shot pipeline-end dump (see layout comment at top). */
+        if (brixDiagOn() && cascade->info.index == 0)
+        {
+            /* FFX_BRIX_DIAG_AT=<frame>: capture at the first cascade-0 update
+             * whose raw frameIndex is >= the value (0 = first qualifying bake,
+             * the old behaviour). Every cascade-0 update is logged so the
+             * target frame can be picked from a dry run. */
+            fprintf(stderr, "[ffxBrixDiag] c0 frame=%u voxelCount=%u%s\n",
+                    context->frameIndex, voxelCount,
+                    (g_brixDiagScheduled >= brixDiagCount() && g_brixDiagRead) ? " (captured)" : "");
+            if (g_brixDiagScheduled < brixDiagCount() && voxelCount > 0 &&
+                (brixDiagAt() == 0u || context->frameIndex >= brixDiagAt() + 2u * g_brixDiagScheduled))
+            {
+                const uint32_t region = g_brixDiagScheduled;
+                const uint32_t regionBase = region * 1572864u;
+                g_brixDiagScheduled++;
+                if (region == 0) g_brixDiagUpdates = 0;
+                /* Source offsets computed from THIS bake's scratch partition —
+                 * the job-counter partitions scale with numJobs + numInstances,
+                 * so fixed offsets only fit the bake they were derived from.
+                 * MEMBER_LIST order: 0 counters, 1 triangle_swap, 2 voxel_fail,
+                 * 3 bricks_storage, 4 storage_offsets, 5 compression_list,
+                 * 6 clear_list, 7 job_counters, 8 job_scan, 9 job_global_scan,
+                 * 10 cr1_refs, 11 cr1_compacted, 12 cr1_ref_counters,
+                 * 13 cr1_ref_scan, 14 cr1_ref_global, 15 cr1_stamp_scan,
+                 * 16 cr1_stamp_global, 17 debug_aabbs. */
+                FfxBrixelizerScratchPartition sp = {};
+                getScratchMemorySize(context, desc, &sp);
+#define BRIX_SP_OFF(idx) (sp.array[FFX_BRIXELIZER_NUM_SCRATCH_SPACE_RANGES + (idx)])
+                FfxResourceInternal rb = context->resources[getCascadeReadbackBufferResourceID(0, 0)];
+                scheduleCopy(context, context->resources[FFX_BRIXELIZER_RESOURCE_IDENTIFIER_SCRATCH_BUFFER], 0,                rb, regionBase,          40,    L"BrixDiagCounters");
+                scheduleCopy(context, context->resources[FFX_BRIXELIZER_RESOURCE_IDENTIFIER_SCRATCH_BUFFER], BRIX_SP_OFF(5),  rb, regionBase + 8192,     4096,  L"BrixDiagCompressList");
+                /* cascade-0 brick map: the direct observable of the collapse —
+                 * which wrapped slots hold a brick after THIS bake. */
+                scheduleCopy(context, context->resources[FFX_BRIXELIZER_RESOURCE_IDENTIFIER_CASCADE_BRICK_MAP + 0], 0, rb, regionBase + 524288, 1048576, L"BrixDiagBrickMap");
+#undef BRIX_SP_OFF
+                fprintf(stderr, "[ffxBrixDiag] cascade-0 dump region %u scheduled at frame %u\n", region, context->frameIndex);
+            }
+            if (g_brixDiagScheduled >= brixDiagCount() && g_brixDiagScheduled > 0 && !g_brixDiagRead)
+            {
+                ++g_brixDiagUpdates;
+                if (g_brixDiagUpdates >= 3) // let the GPU copy land (3-update margin)
+                {
+                    void* mapped = context->cascadeReadbackBufferMappedPointers[getCascadeReadbackBufferID(0, 0)];
+                    if (mapped) {
+                        if (!g_brixDiagHost) g_brixDiagHost = (uint8_t*)malloc(FFX_BRIX_DIAG_SIZE);
+                        if (g_brixDiagHost) {
+                            memcpy(g_brixDiagHost, mapped, FFX_BRIX_DIAG_SIZE);
+                            g_brixDiagRead = true;
+                            fprintf(stderr, "[ffxBrixDiag] pipeline-end dump captured (%u bytes)\n", FFX_BRIX_DIAG_SIZE);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     return FFX_OK;
@@ -1775,6 +1892,15 @@ FfxErrorCode ffxBrixelizerRawContextCreate(FfxBrixelizerRawContext* context, con
     // zero context memory
     memset(context, 0, sizeof(FfxBrixelizerRawContext));
 
+    /* FFX_BRIX_DIAG: the dump is per-context — a recreated context restarts
+     * the capture (region scheduler + captured flag), so a fresh-context A/B
+     * captures the new context's first bake, not the old one's leftovers. */
+    g_brixDiagScheduled = 0;
+    g_brixDiagRead      = false;
+    g_brixDiagUpdates   = 0;
+    free(g_brixDiagHost);
+    g_brixDiagHost      = NULL;
+
     // check pointers are valid.
     FFX_RETURN_ON_ERROR(context, FFX_ERROR_INVALID_POINTER);
     FFX_RETURN_ON_ERROR(contextDescription, FFX_ERROR_INVALID_POINTER);
@@ -1867,8 +1993,10 @@ FfxErrorCode ffxBrixelizerRawContextCreateCascade(FfxBrixelizerRawContext* conte
             desc.heapType = FFX_HEAP_TYPE_READBACK;
             desc.resourceDescription.type = FFX_RESOURCE_TYPE_BUFFER;
             desc.resourceDescription.format = FFX_SURFACE_FORMAT_R32_UINT;
-            desc.resourceDescription.size = sizeof(FfxBrixelizerScratchCounters);
-            desc.resourceDescription.stride = sizeof(FfxBrixelizerScratchCounters);
+            desc.resourceDescription.size = (brixDiagOn() && cascadePrivate->info.index == 0 && i == 0)
+                                                ? FFX_BRIX_DIAG_SIZE
+                                                : sizeof(FfxBrixelizerScratchCounters);
+            desc.resourceDescription.stride = desc.resourceDescription.size;
             desc.resourceDescription.mipCount = 1;
             desc.resourceDescription.flags = FFX_RESOURCE_FLAGS_NONE;
             desc.resourceDescription.usage = FFX_RESOURCE_USAGE_READ_ONLY;
@@ -2049,6 +2177,12 @@ FfxErrorCode ffxBrixelizerRawContextGetCascadeCounters(FfxBrixelizerRawContext* 
 
     *counters = contextPrivate->cascadeCounters[cascadeIndex];
     return FFX_OK;
+}
+
+void* ffxBrixelizerRawGetDiagDump(uint32_t* outSize)
+{
+    if (outSize) *outSize = g_brixDiagRead ? FFX_BRIX_DIAG_SIZE : 0;
+    return g_brixDiagRead ? (void*)g_brixDiagHost : NULL;
 }
 
 FfxErrorCode ffxBrixelizerRawContextCreateInstances(FfxBrixelizerRawContext* uncastContext, const FfxBrixelizerRawInstanceDescription* instanceDescriptions, uint32_t numInstanceDescriptions)

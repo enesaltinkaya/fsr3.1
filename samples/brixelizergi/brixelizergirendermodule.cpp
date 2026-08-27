@@ -23,6 +23,7 @@
 #include "brixelizergirendermodule.h"
 
 #include <cstdlib>
+#include <cstdio>
 #include <cstring>
 #include <functional>
 #include <float.h>
@@ -80,6 +81,23 @@ void BrixelizerGIRenderModule::Init(const json& initData)
         else if (!strcmp(mode, "example"))     m_OutputMode = OutputMode::ExampleShader;
         else                                    m_OutputMode = OutputMode::None;
         wprintf(L"[brixgi-test] Output Mode forced to '%hs'\n", mode);
+    }
+    // [test hook, not part of the upstream sample] BRIXGI_STATIC_ONLY=1:
+    // engine-parity cascade layout for A/B against the game's Step-2 smoke
+    // test — 8 STATIC-only cascades (no dynamic/merged split, raw cascade ==
+    // level) with 2 m base voxel size doubling per level, and the GI/debug
+    // trace range moved down to the static cascades 0..7 (the default range
+    // points at the merged cascades 16..23 which never update in this mode).
+    // m_MeshUnitSize/m_CascadeSizeRatio are not UI-bound, so the recreate
+    // check in Execute() stays consistent with what CreateBrixelizerContext
+    // wrote into cascadeDescs[].
+    if (const char* so = std::getenv("BRIXGI_STATIC_ONLY"); so && so[0] == '1')
+    {
+        m_MeshUnitSize   = 2.0f;
+        m_CascadeSizeRatio = 2.0f;
+        m_StartCascadeIdx = 0;
+        m_EndCascadeIdx   = NUM_BRIXELIZER_CASCADES - 1;
+        wprintf(L"[brixgi-test] STATIC_ONLY cascade layout: 8 static cascades, voxel 2..256 m\n");
     }
     ffxSetPrintMessageCallback(
         [](uint32_t type, const wchar_t* message) {
@@ -428,6 +446,25 @@ void BrixelizerGIRenderModule::Execute(double deltaTime, CommandList* pCmdList)
 
     UpdateConfig();
 
+    // [test hook, not part of the upstream sample] BRIXGI_SINGLE_CUBE=<frame>:
+    // at frame N, delete every instance and submit exactly ONE static instance
+    // (the smallest static surface found in the scene) placed 10 m in front of
+    // the camera, maxCascade = 0. Mirrors the engine's Step-2 voxelizer smoke
+    // test (sparse single object in an otherwise empty clipmap) so the two
+    // integrations can be A/B-compared on the brick-pool behaviour: the engine
+    // observes its baked bricks collapsing 27 -> 2 within one update of the
+    // bake (the "ghost cube" artifact).
+    static const int32_t cubeFrame = []() {
+        const char* e = std::getenv("BRIXGI_SINGLE_CUBE");
+        return e ? std::atoi(e) : 0;
+    }();
+    static bool cubeDone = false;
+    if (!cubeDone && cubeFrame > 0 && (int32_t)m_FrameIndex >= cubeFrame)
+    {
+        CreateSingleSparseInstance();
+        cubeDone = true;
+    }
+
     // Create the dynamic instances every frame.
     FlushInstances(false);
 
@@ -461,6 +498,30 @@ void BrixelizerGIRenderModule::Execute(double deltaTime, CommandList* pCmdList)
         const char* env = std::getenv("BRIXGI_EXIT_FRAMES");
         return env ? std::atoi(env) : 0;
     }();
+
+    // [test hook] FFX_BRIX_DIAG=1 (fork diagnostic in the FFX lib): when the
+    // one-shot cascade-0 pipeline-end dump has been captured, write it to
+    // BRIXGI_DIAG_PATH (default /tmp/brixgi_diag.bin) once. Contains the bake
+    // frame's per-voxel reference counters + brick compression list — the
+    // per-voxel ground truth for the sparse-object A/B.
+    static void* diagLastWritten = nullptr;
+    {
+        uint32_t diagSize = 0;
+        void*    diagData = ffxBrixelizerRawGetDiagDump(&diagSize);
+        if (diagData && diagSize > 0 && diagData != diagLastWritten)
+        {
+            const char* diagPath = std::getenv("BRIXGI_DIAG_PATH");
+            FILE* f = fopen(diagPath && *diagPath ? diagPath : "/tmp/brixgi_diag.bin", "wb");
+            if (f)
+            {
+                fwrite(diagData, 1, diagSize, f);
+                fclose(f);
+                wprintf(L"[brixgi-test] FFX diag dump written (%u bytes)\n", diagSize);
+            }
+            diagLastWritten = diagData;
+        }
+    }
+
     if (exitFrames > 0 && (int32_t)m_FrameIndex >= exitFrames)
     {
         wprintf(L"[brixgi-test] reached frame %u, exiting\n", m_FrameIndex);
@@ -689,6 +750,179 @@ void BrixelizerGIRenderModule::DeleteInstances()
     }
 }
 
+// [test hook, not part of the upstream sample] BRIXGI_SINGLE_CUBE=<frame> —
+// see Execute(). Mirrors the engine's Step-2 smoke test: after the scene has
+// baked, drop every instance and submit exactly one static instance (the
+// smallest static surface) 10 m in front of the camera, maxCascade = 0, into
+// an otherwise empty clipmap. The engine then observes its freshly baked
+// brick block collapse (27 -> 2) within one update; the sample run tells us
+// whether the same collapse happens with the reference integration.
+void BrixelizerGIRenderModule::CreateSingleSparseInstance()
+{
+    // Remember the smallest static surface before the instance list goes away.
+    // BRIXGI_CUBE_MIN_EXTENT (metres): skip surfaces whose largest extent is
+    // below this — used to pick an object that spans several voxels (a
+    // sub-voxel object cannot exhibit "interior bricks get freed" behaviour).
+    static const float minExtent = []() {
+        const char* e = std::getenv("BRIXGI_CUBE_MIN_EXTENT");
+        return (e && *e) ? (float)std::atof(e) : 0.0f;
+    }();
+    // BRIXGI_CUBE_SCALE=<metres>: scale the picked object so its largest
+    // extent equals this — produces a SOLID multi-voxel object (the engine's
+    // Step-2 smoke test uses a 4 m cube; the toyshop's native meshes are all
+    // sub-voxel at a 2 m voxel size, and a flat object frees its adjacent
+    // voxels legitimately, which hides the engine's failure mode).
+    static const float targetExtent = []() {
+        const char* e = std::getenv("BRIXGI_CUBE_SCALE");
+        return (e && *e) ? (float)std::atof(e) : 0.0f;
+    }();
+    const Surface* surface  = nullptr;
+    float          bestVol  = 3.0e38f;
+    float          pickedMaxExtent = 0.0f;
+    for (const BrixelizerInstanceInfo& info : m_Instances)
+    {
+        if (info.isDynamic)
+            continue;
+        const Vec4 c = info.surface->Center();
+        const Vec4 r = info.surface->Radius();
+        const Vec3 d = Vec3(r.getX() * 2.0f, r.getY() * 2.0f, r.getZ() * 2.0f);
+        const float maxExt = std::max(d.getX(), std::max(d.getY(), d.getZ()));
+        if (maxExt < minExtent)
+            continue;
+        /* BRIXGI_CUBE_SOLID=1: require extent on EVERY axis — planar meshes
+         * (decals/quads) free their adjacent voxels legitimately and hide the
+         * engine's failure mode, which needs a solid multi-voxel object. */
+        static const bool needSolid = []() {
+            const char* e = std::getenv("BRIXGI_CUBE_SOLID");
+            return e && e[0] == '1';
+        }();
+        if (needSolid && std::min(d.getX(), std::min(d.getY(), d.getZ())) < 1.0e-3f)
+            continue;
+        const float vol = d.getX() * d.getY() * d.getZ();
+        if (vol < bestVol)
+        {
+            bestVol = vol;
+            surface = info.surface;
+            pickedMaxExtent = maxExt;
+        }
+    }
+    if (!surface)
+    {
+        wprintf(L"[brixgi-test] SINGLE_CUBE: no static surface found, skipping\n");
+        return;
+    }
+
+    // BRIXGI_CUBE_FRESH=1: destroy and recreate both FFX contexts before
+    // submitting the single instance — a pristine voxelizer state with no
+    // stale bricks and no deletion-invalidations from the toyshop scene, so
+    // the A/B (origin vs far world coordinates) measures only position
+    // dependence. m_Buffers is cleared as well: buffer indices belong to the
+    // old context and are re-registered on demand by GetBufferIndex below.
+    static const bool freshContext = []() {
+        const char* e = std::getenv("BRIXGI_CUBE_FRESH");
+        return e && e[0] == '1';
+    }();
+    DeleteInstances();
+    m_Instances.clear();
+    if (freshContext)
+    {
+        DeleteBrixelizerGIContext();
+        DeleteBrixelizerContext();
+        CreateBrixelizerContext();
+        CreateBrixelizerGIContext();
+        m_Buffers.clear();
+        wprintf(L"[brixgi-test] SINGLE_CUBE: contexts recreated (fresh voxelizer state)\n");
+    }
+
+    const VertexBufferInformation* vertexBufferInfo = &surface->GetVertexBuffer(VertexAttributeType::Position);
+    const IndexBufferInformation&  indexBufferInfo  = surface->GetIndexBuffer();
+
+    uint32_t vertexBufferIndex = GetBufferIndex(vertexBufferInfo->pBuffer);
+    uint32_t indexBufferIndex  = GetBufferIndex(indexBufferInfo.pBuffer);
+
+    // Place the object 10 m in front of the (stationary) camera, identity
+    // orientation — the camera looks down -Z in view space, so the world-space
+    // forward vector is -(column 2 of the inverse view matrix). When
+    // BRIXGI_SDF_CENTER pins the clipmap far from the camera, place relative
+    // to the pinned centre instead so the object stays inside the window.
+    CameraComponent* cam     = GetScene()->GetCurrentCamera();
+    const Vec3       camPos  = s_PinnedCenter[0] != 0.0f || s_PinnedCenter[1] != 0.0f || s_PinnedCenter[2] != 0.0f
+            ? Vec3(s_PinnedCenter[0], s_PinnedCenter[1], s_PinnedCenter[2])
+            : cam->GetCameraPos();
+    const Vec4 col2   = cam->GetInverseView().getCol(2);
+    float      fx     = -col2.getX();
+    float      fy     = -col2.getY();
+    float      fz     = -col2.getZ();
+    const float fl    = std::sqrt(fx * fx + fy * fy + fz * fz);
+    if (fl > 1.0e-6f)
+    {
+        fx /= fl;
+        fy /= fl;
+        fz /= fl;
+    }
+    const Vec3 center = Vec3(camPos.getX() + fx * 10.0f, camPos.getY() + fy * 10.0f, camPos.getZ() + fz * 10.0f);
+    // Optional per-axis scale (BRIXGI_CUBE_SCALE) — normalizes every extent
+    // to the target so the object is a cube-like solid spanning ~2 voxels at
+    // a 2 m voxel size (the mesh's native aspect is otherwise arbitrary).
+    float sx = 1.0f, sy = 1.0f, sz = 1.0f;
+    if (targetExtent > 0.0f)
+    {
+        const Vec4 r0 = surface->Radius();
+        const float ex = std::max(2.0f * r0.getX(), 1.0e-4f);
+        const float ey = std::max(2.0f * r0.getY(), 1.0e-4f);
+        const float ez = std::max(2.0f * r0.getZ(), 1.0e-4f);
+        sx = targetExtent / ex;
+        sy = targetExtent / ey;
+        sz = targetExtent / ez;
+    }
+    const Mat4 transform = Mat4::translation(center) * Mat4::scale(Vec3(sx, sy, sz));
+
+    // Local bounds (center/radius) transformed by the placement transform.
+    const Vec4  c        = surface->Center();
+    const Vec4  r        = Vec4(surface->Radius().getX() * sx, surface->Radius().getY() * sy, surface->Radius().getZ() * sz, 0.0f);
+    const Vec4  aabbMinV = c - r + Vec4(center, 0.0f);
+    const Vec4  aabbMaxV = c + r + Vec4(center, 0.0f);
+
+    FfxBrixelizerInstanceDescription desc = {};
+    for (uint32_t i = 0; i < 3; ++i)
+    {
+        desc.aabb.min[i] = aabbMinV[i];
+        desc.aabb.max[i] = aabbMaxV[i];
+    }
+    for (uint32_t row = 0; row < 3; ++row)
+    {
+        for (uint32_t col = 0; col < 4; ++col)
+        {
+            desc.transform[row * 4 + col] = transform.getCol(col)[row];
+        }
+    }
+    desc.indexFormat       = indexBufferInfo.IndexFormat == ResourceFormat::R16_UINT ? FFX_INDEX_TYPE_UINT16 : FFX_INDEX_TYPE_UINT32;
+    desc.indexBuffer       = indexBufferIndex;
+    desc.indexBufferOffset = 0;
+    desc.triangleCount     = indexBufferInfo.Count / 3;
+
+    desc.vertexBuffer = vertexBufferIndex;
+    desc.vertexStride       = 3 * sizeof(float);
+    desc.vertexBufferOffset = 0;
+    desc.vertexCount        = vertexBufferInfo->Count;
+    desc.vertexFormat       = FFX_SURFACE_FORMAT_R32G32B32_FLOAT;
+
+    FfxBrixelizerInstanceID instanceID = FFX_BRIXELIZER_INVALID_ID;
+    desc.outInstanceID = &instanceID;
+    desc.flags         = FFX_BRIXELIZER_INSTANCE_FLAG_NONE;
+    desc.maxCascade    = 0;
+
+    FfxErrorCode errorCode = ffxBrixelizerCreateInstances(&m_BrixelizerContext, &desc, 1);
+    CauldronAssert(AssertLevel::ASSERT_ERROR, errorCode == FFX_OK, L"Failed call to ffxBrixelizerCreateInstances.");
+
+    wprintf(L"[brixgi-test] SINGLE_CUBE: id=%u tris=%u aabb=[%.2f,%.2f,%.2f..%.2f,%.2f,%.2f] "
+            L"cam=[%.2f,%.2f,%.2f] fwd=[%.2f,%.2f,%.2f]\n",
+            instanceID, desc.triangleCount,
+            desc.aabb.min[0], desc.aabb.min[1], desc.aabb.min[2],
+            desc.aabb.max[0], desc.aabb.max[1], desc.aabb.max[2],
+            camPos.getX(), camPos.getY(), camPos.getZ(), fx, fy, fz);
+}
+
 void BrixelizerGIRenderModule::CreateBrixelizerContext()
 {
     m_InitializationParameters.sdfCenter[0] = 0.0f;
@@ -698,10 +932,19 @@ void BrixelizerGIRenderModule::CreateBrixelizerContext()
     m_InitializationParameters.numCascades  = NUM_BRIXELIZER_CASCADES;
 
     float voxelSize = m_MeshUnitSize;
+    // [test hook] BRIXGI_STATIC_ONLY=1 — see Init(). STATIC-only cascades make
+    // the raw cascade index equal the level index (the SDK assigns
+    // mergedIndex = staticIndex), matching the engine's Step-1 layout.
+    static const bool s_StaticOnly = []() {
+        const char* e = std::getenv("BRIXGI_STATIC_ONLY");
+        return e && e[0] == '1';
+    }();
     for (uint32_t i = 0; i < m_InitializationParameters.numCascades; ++i)
     {
         FfxBrixelizerCascadeDescription* cascadeDesc = &m_InitializationParameters.cascadeDescs[i];
-        cascadeDesc->flags                    = (FfxBrixelizerCascadeFlag)(FFX_BRIXELIZER_CASCADE_STATIC | FFX_BRIXELIZER_CASCADE_DYNAMIC);
+        cascadeDesc->flags                    = s_StaticOnly
+            ? FFX_BRIXELIZER_CASCADE_STATIC
+            : (FfxBrixelizerCascadeFlag)(FFX_BRIXELIZER_CASCADE_STATIC | FFX_BRIXELIZER_CASCADE_DYNAMIC);
         cascadeDesc->voxelSize                = voxelSize;
         voxelSize *= m_CascadeSizeRatio;
     }
@@ -824,6 +1067,28 @@ void BrixelizerGIRenderModule::UpdateBrixelizerContext(cauldron::CommandList* pC
 
     // Draw Brixelizer stats
     {
+        // [test hook, not part of the upstream sample] BRIXGI_LOG_STATS=<stride>:
+        // print the (lagged) voxelizer stats every <stride> frames to stdout —
+        // the brick-pool trace used for the engine A/B comparison (the engine
+        // observes its baked bricks collapsing 27 -> 2 one update after the
+        // bake; freeBricks is the same signal).
+        static const uint32_t statsStride = []() {
+            const char* e = std::getenv("BRIXGI_LOG_STATS");
+            return (e && *e) ? (uint32_t)std::atoi(e) : 0u;
+        }();
+        static uint32_t statsCounter = 0;
+        if (statsStride && (statsCounter++ % statsStride) == 0)
+        {
+            wprintf(L"[brixgi-stats] f=%u casc=%u free=%llu att=%u succ=%u cleared=%u merged=%u "
+                    L"sTris=%u sRefs=%u sBricks=%u dTris=%u dRefs=%u dBricks=%u\n",
+                    m_FrameIndex, stats.cascadeIndex, (unsigned long long)stats.contextStats.freeBricks,
+                    stats.contextStats.brickAllocationsAttempted, stats.contextStats.brickAllocationsSucceeded,
+                    stats.contextStats.bricksCleared, stats.contextStats.bricksMerged,
+                    stats.staticCascadeStats.trianglesAllocated, stats.staticCascadeStats.referencesAllocated,
+                    stats.staticCascadeStats.bricksAllocated, stats.dynamicCascadeStats.trianglesAllocated,
+                    stats.dynamicCascadeStats.referencesAllocated, stats.dynamicCascadeStats.bricksAllocated);
+        }
+
         if (m_ResetStats)
         {
             m_ResetStats           = false;
@@ -1481,7 +1746,29 @@ void BrixelizerGIRenderModule::UpdateConfig()
         m_SdfCenter[1] = cameraPos.getY();
         m_SdfCenter[2] = cameraPos.getZ();
     }
+    // [test hook, not part of the upstream sample] BRIXGI_SDF_CENTER=x,y,z —
+    // pin the SDF center to a fixed world position instead of the camera's,
+    // for A/B against the engine's large/negative world coordinates (its
+    // smoke test runs at sdfCenter ~ (4165, 34, -353), far from the origin —
+    // the stock sample never leaves the neighbourhood of (0,0,0)).
+    static const bool s_PinCenter = []() {
+        const char* e = std::getenv("BRIXGI_SDF_CENTER");
+        if (!e || !*e)
+            return false;
+        if (sscanf(e, "%f,%f,%f", &s_PinnedCenter[0], &s_PinnedCenter[1], &s_PinnedCenter[2]) == 3)
+            return true;
+        return false;
+    }();
+    if (s_PinCenter)
+    {
+        m_SdfCenter[0] = s_PinnedCenter[0];
+        m_SdfCenter[1] = s_PinnedCenter[1];
+        m_SdfCenter[2] = s_PinnedCenter[2];
+    }
 }
+
+// [test hook] storage for BRIXGI_SDF_CENTER (see UpdateConfig).
+/* static */ float BrixelizerGIRenderModule::s_PinnedCenter[3] = { 0.0f, 0.0f, 0.0f };
 
 uint32_t BrixelizerGIRenderModule::GetBufferIndex(const cauldron::Buffer* buffer)
 {

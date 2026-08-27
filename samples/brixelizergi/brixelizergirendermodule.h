@@ -270,6 +270,12 @@ private:
     void DispatchExampleShader(cauldron::CommandList* pCmdList);
     void FlushInstances(bool flushStaticInstances);
     void DeleteInstances();
+    // [test hook, not part of the upstream sample] BRIXGI_SINGLE_CUBE — see
+    // Execute(). Deletes every instance and submits one sparse static instance.
+    void CreateSingleSparseInstance();
+
+    // [test hook] BRIXGI_SDF_CENTER pinned centre storage (see UpdateConfig).
+    static float s_PinnedCenter[3];
 
     void CreateBrixelizerGIContext();
     void DeleteBrixelizerGIContext();

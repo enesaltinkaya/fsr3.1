@@ -574,6 +574,11 @@ FFX_API FfxErrorCode ffxBrixelizerRawContextGetDebugCounters(FfxBrixelizerRawCon
 /// @ingroup ffxBrixelizer
 FFX_API FfxErrorCode ffxBrixelizerRawContextGetCascadeCounters(FfxBrixelizerRawContext* context, uint32_t cascadeIndex, FfxBrixelizerScratchCounters* counters);
 
+/// Fork diagnostic: one-shot pipeline-end scratch dump for cascade 0, enabled
+/// by the FFX_BRIX_DIAG=1 environment variable (read at FFX startup). Returns
+/// a pointer to the captured dump (size in *outSize), or NULL until captured.
+FFX_API void* ffxBrixelizerRawGetDiagDump(uint32_t* outSize);
+
 /// Create an instance in a Brixelizer context.
 ///
 /// @param [out] context                        The <c><i>FfxBrixelizerRawContext</i></c> to create an instance for.
