@@ -173,6 +173,22 @@ typedef struct FfxBrixelizerGIDispatchDescription
     FfxResource outputDiffuseGI;            ///< A texture to write the output diffuse GI calculated by Brixelizer GI.
     FfxResource outputSpecularGI;           ///< A texture to write the output specular GI calculated by Brixelizer GI.
 
+    /* game-001 fork patch (diagnostic): optional external copies of two internal
+     * per-pixel debug images.  When non-null, the dispatch binds these in place
+     * of the internal resources of the same identifier for this frame only:
+     *  - outputDebugTarget:      R16G16B16A16_FLOAT at the screen-probe buffer
+     *                            size (see ffxBrixelizerGIGetDebugOutputSizes).
+     *                            Written by the ReprojectGI pass: (1,0,0,1) red
+     *                            marks the per-pixel history reset taken when
+     *                            !has_world_probe && weight_sum < 1e-3; every
+     *                            other pixel is (0,0,0,1).
+     *  - outputDisocclusionMask: R8_UNORM at the internal resolution, written by
+     *                            the GenerateDisocclusionMask pass: 1 where the
+     *                            pixel's temporal history was rejected, 0 otherwise.
+     * Both must be UAV-usable color images created by the caller. */
+    FfxResource outputDebugTarget;
+    FfxResource outputDisocclusionMask;
+
     FfxBrixelizerRawContext *brixelizerContext; ///< A pointer to the Brixelizer context for use with Brixelizer GI.
 } FfxBrixelizerGIDispatchDescription;
 
@@ -327,6 +343,19 @@ FFX_API FfxErrorCode ffxBrixelizerGIContextDispatch(FfxBrixelizerGIContext* pCon
 ///
 /// @ingroup ffxBrixgi
 FFX_API FfxErrorCode ffxBrixelizerGIContextDebugVisualization(FfxBrixelizerGIContext* pContext, const FfxBrixelizerGIDebugDescription* pDebugDescription, FfxCommandList pCommandList);
+
+/// game-001 fork patch (diagnostic): query the sizes of the two per-pixel
+/// debug images exposed via FfxBrixelizerGIDispatchDescription's
+/// outputDebugTarget / outputDisocclusionMask fields.  outDebugTargetSize is
+/// the screen-probe buffer size (R16G16B16A16_FLOAT) and
+/// outDisocclusionMaskSize is the internal size (R8_UNORM); each is [width, height].
+///
+/// @retval
+/// FFX_OK                      The operation completed successfully.
+/// FFX_ERROR_INVALID_POINTER   A pointer argument was NULL.
+///
+/// @ingroup ffxBrixgi
+FFX_API FfxErrorCode ffxBrixelizerGIGetDebugOutputSizes(FfxBrixelizerGIContext* pContext, uint32_t* outDebugTargetSize, uint32_t* outDisocclusionMaskSize);
 
 /// Queries the effect version number.
 ///

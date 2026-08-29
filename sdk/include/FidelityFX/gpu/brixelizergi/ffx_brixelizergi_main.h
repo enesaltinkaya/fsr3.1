@@ -1577,8 +1577,18 @@ void FfxBrixelizerGIInterpolateScreenProbes(FfxUInt32x2 tid, FfxUInt32x2 gid)
     }
     if (!has_world_probe && weight_sum < FfxFloat32(1.0e-3)) 
     {
-        StoreStaticGITarget(tid, FFX_BROADCAST_FLOAT32X4(0.0));
-        StoreDebugTarget(tid, FfxFloat32x4(1.0, 0.0, 0.0, 1.0));
+#if FFX_BRIXELIZER_GI_OPTION_DISABLE_DENOISER == 0
+        if (reprojected.w > FfxFloat32(0.0) && !any(isnan(reprojected)))
+        {
+            StoreStaticGITarget(tid, FfxFloat32x4(reprojected.xyz, reprojected.w * FfxFloat32(0.9)));
+            StoreDebugTarget(tid, FfxFloat32x4(0.0, 1.0, 0.0, 1.0));
+        }
+        else
+#endif
+        {
+            StoreStaticGITarget(tid, FFX_BROADCAST_FLOAT32X4(0.0));
+            StoreDebugTarget(tid, FfxFloat32x4(1.0, 0.0, 0.0, 1.0));
+        }
     } 
     else 
     {

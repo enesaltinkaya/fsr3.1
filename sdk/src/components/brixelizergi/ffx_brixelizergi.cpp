@@ -1419,6 +1419,30 @@ static FfxErrorCode brixelizerGIDispatch(FfxBrixelizerGIContext_Private*        
                                                                          &pContext->resources[FFX_BRIXELIZER_GI_RESOURCE_IDENTIFIER_INPUT_CASCADE_BRICK_MAPS + i]);
     }
 
+    /* game-001 fork patch (diagnostic): optional external copies of the two
+     * per-pixel debug images.  The dispatch binds pipelines strictly through
+     * pContext->resources[identifier], so overriding the handle for this frame
+     * alone redirects the GenerateDisocclusionMask / ReprojectGI writes to the
+     * caller's images.  The persistent internal handles are restored after the
+     * jobs run so the next dispatch is unaffected. */
+    FfxResourceInternal savedDebugTarget      = pContext->resources[FFX_BRIXELIZER_GI_RESOURCE_IDENTIFIER_DEBUG_TARGET];
+    FfxResourceInternal savedDisocclusionMask = pContext->resources[FFX_BRIXELIZER_GI_RESOURCE_IDENTIFIER_DISOCCLUSION_MASK];
+
+    if (!isResourceNull(pDispatchDescription->outputDebugTarget))
+    {
+        pContext->contextDescription.backendInterface.fpRegisterResource(&pContext->contextDescription.backendInterface,
+                                                                         &pDispatchDescription->outputDebugTarget,
+                                                                         pContext->effectContextId,
+                                                                         &pContext->resources[FFX_BRIXELIZER_GI_RESOURCE_IDENTIFIER_DEBUG_TARGET]);
+    }
+    if (!isResourceNull(pDispatchDescription->outputDisocclusionMask))
+    {
+        pContext->contextDescription.backendInterface.fpRegisterResource(&pContext->contextDescription.backendInterface,
+                                                                         &pDispatchDescription->outputDisocclusionMask,
+                                                                         pContext->effectContextId,
+                                                                         &pContext->resources[FFX_BRIXELIZER_GI_RESOURCE_IDENTIFIER_DISOCCLUSION_MASK]);
+    }
+
     uint32_t bufferWidth = pContext->internalSize.width;
     uint32_t bufferHeight = pContext->internalSize.height;
  
@@ -1772,6 +1796,11 @@ static FfxErrorCode brixelizerGIDispatch(FfxBrixelizerGIContext_Private*        
     // Release dynamic resources
     pContext->contextDescription.backendInterface.fpUnregisterResources(&pContext->contextDescription.backendInterface, pCommandList, pContext->effectContextId);
 
+    /* game-001 fork patch (diagnostic): restore the persistent internal
+     * handles (see the override registration at the top of the dispatch). */
+    pContext->resources[FFX_BRIXELIZER_GI_RESOURCE_IDENTIFIER_DEBUG_TARGET]      = savedDebugTarget;
+    pContext->resources[FFX_BRIXELIZER_GI_RESOURCE_IDENTIFIER_DISOCCLUSION_MASK] = savedDisocclusionMask;
+
     pContext->frameIndex++;
 
     pContext->currentScreenProbesId = filledScreenProbesId;
@@ -1974,4 +2003,26 @@ FfxErrorCode ffxBrixelizerGIContextDebugVisualization(FfxBrixelizerGIContext* pC
 FFX_API FfxVersionNumber ffxBrixelizerGIGetEffectVersion()
 {
     return FFX_SDK_MAKE_VERSION(FFX_BRIXELIZER_GI_VERSION_MAJOR, FFX_BRIXELIZER_GI_VERSION_MINOR, FFX_BRIXELIZER_GI_VERSION_PATCH);
+}
+
+/* game-001 fork patch (diagnostic): sizes of the per-pixel debug images the
+ * dispatch can redirect to caller-owned resources (see
+ * FfxBrixelizerGIDispatchDescription::outputDebugTarget /
+ * outputDisocclusionMask).  The expressions mirror the context-creation
+ * resource sizing exactly (including the float internal-size arithmetic). */
+FfxErrorCode ffxBrixelizerGIGetDebugOutputSizes(FfxBrixelizerGIContext* pContext, uint32_t* outDebugTargetSize, uint32_t* outDisocclusionMaskSize)
+{
+    FFX_RETURN_ON_ERROR(pContext, FFX_ERROR_INVALID_POINTER);
+    FFX_RETURN_ON_ERROR(outDebugTargetSize, FFX_ERROR_INVALID_POINTER);
+    FFX_RETURN_ON_ERROR(outDisocclusionMaskSize, FFX_ERROR_INVALID_POINTER);
+
+    FfxBrixelizerGIContext_Private* contextPrivate = (FfxBrixelizerGIContext_Private*)pContext;
+
+    outDisocclusionMaskSize[0] = contextPrivate->internalSize.width;
+    outDisocclusionMaskSize[1] = contextPrivate->internalSize.height;
+
+    outDebugTargetSize[0] = FFX_BRIXELIZER_GI_SCREEN_PROBE_SIZE * ((contextPrivate->internalSize.width + FFX_BRIXELIZER_GI_SCREEN_PROBE_SIZE - 1) / FFX_BRIXELIZER_GI_SCREEN_PROBE_SIZE);
+    outDebugTargetSize[1] = FFX_BRIXELIZER_GI_SCREEN_PROBE_SIZE * ((contextPrivate->internalSize.height + FFX_BRIXELIZER_GI_SCREEN_PROBE_SIZE - 1) / FFX_BRIXELIZER_GI_SCREEN_PROBE_SIZE);
+
+    return FFX_OK;
 }
