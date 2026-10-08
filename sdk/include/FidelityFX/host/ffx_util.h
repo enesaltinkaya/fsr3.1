@@ -25,7 +25,9 @@
 #include <FidelityFX/host/ffx_types.h>
 // fork patch (Brixelizer win build): std::popcount lives in <bit>; without
 // it the header only compiled where <bit> was pulled in transitively.
+#if defined(__cplusplus)
 #include <bit>
+#endif
 
 /// @defgroup Utils Utilities
 /// Utility Macros used by the FidelityFX SDK
@@ -35,12 +37,17 @@
 /// The value of Pi.
 ///
 /// @ingroup Utils
+#if defined(__cplusplus)
 const float FFX_PI = 3.141592653589793f;
 
 /// An epsilon value for floating point numbers.
 ///
 /// @ingroup Utils
 const float FFX_EPSILON = 1e-06f;
+#else
+#define FFX_PI      3.141592653589793f
+#define FFX_EPSILON 1e-06f
+#endif
 
 /// Helper macro to create the version number.
 ///
